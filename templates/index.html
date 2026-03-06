@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Tracker</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+        h1 { text-align: center; margin: 16px 0; font-size: 24px; }
+        h2 { font-size: 18px; margin: 20px 0 12px; }
+
+        .scan-btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            background: #8B5E3C;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        .scan-btn:active { background: #6d4a2f; }
+        .scan-btn:disabled { background: #555; cursor: wait; }
+
+        #camera-input { display: none; }
+
+        .card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .field { margin: 8px 0; }
+        .field label {
+            display: block;
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+        .field input, .field textarea {
+            width: 100%;
+            padding: 8px;
+            background: #333;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 16px;
+            font-family: inherit;
+        }
+        .field textarea { resize: vertical; min-height: 60px; }
+
+        .rating { display: flex; gap: 8px; margin: 8px 0; }
+        .rating button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            background: #333;
+            color: #e0e0e0;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .rating button.active {
+            border-color: #8B5E3C;
+            background: #8B5E3C;
+            color: white;
+        }
+
+        .actions { display: flex; gap: 8px; margin-top: 12px; }
+        .actions button {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .btn-save { background: #2e7d32; color: white; }
+        .btn-cancel { background: #444; color: #ccc; }
+
+        .coffee-item {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 14px;
+            margin: 8px 0;
+        }
+        .coffee-item .roastery { font-size: 12px; color: #999; text-transform: uppercase; }
+        .coffee-item .name { font-size: 18px; font-weight: 600; margin: 2px 0; }
+        .coffee-item .origin { color: #aaa; font-size: 14px; }
+        .coffee-item .notes-line { color: #8B5E3C; font-size: 14px; margin-top: 4px; }
+        .coffee-item .meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #777;
+        }
+        .coffee-item .rating-display { color: #8B5E3C; font-weight: 600; }
+        .coffee-item .delete-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #555;
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty { text-align: center; color: #666; padding: 40px 0; }
+
+        #scan-form, #review-form { display: none; }
+        #scan-form.active, #review-form.active { display: block; }
+    </style>
+</head>
+<body>
+    <h1>Coffee Tracker</h1>
+
+    <label class="scan-btn" for="camera-input">Scan Coffee Bag</label>
+    <input type="file" id="camera-input" accept="image/*">
+
+    <div id="scan-form" class="card">
+        <p><span class="spinner"></span> Analyzing your coffee...</p>
+    </div>
+
+    <div id="review-form" class="card">
+        <h2>Review Details</h2>
+        <div class="field"><label>Roastery</label><input id="f-roastery"></div>
+        <div class="field"><label>Coffee Name</label><input id="f-name"></div>
+        <div class="field"><label>Origin</label><input id="f-origin"></div>
+        <div class="field"><label>Process</label><input id="f-process"></div>
+        <div class="field"><label>Roast Level</label><input id="f-roast_level"></div>
+        <div class="field"><label>Tasting Notes</label><input id="f-tasting_notes"></div>
+        <div class="field"><label>Weight</label><input id="f-weight"></div>
+        <div class="field">
+            <label>Your Rating</label>
+            <div class="rating" id="rating-buttons">
+                <button data-val="1">1</button>
+                <button data-val="2">2</button>
+                <button data-val="3">3</button>
+                <button data-val="4">4</button>
+                <button data-val="5">5</button>
+            </div>
+        </div>
+        <div class="field"><label>Your Notes</label><textarea id="f-notes" placeholder="How was it?"></textarea></div>
+        <div class="actions">
+            <button class="btn-cancel" id="cancel-btn">Cancel</button>
+            <button class="btn-save" id="save-btn">Save</button>
+        </div>
+    </div>
+
+    <h2>My Coffees</h2>
+    <div id="coffee-list"><p class="empty">No coffees yet. Scan your first bag!</p></div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        let selectedRating = null;
+
+        // Camera trigger handled by <label for="camera-input">
+
+        $("camera-input").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            $("scan-form").classList.add("active");
+            $("review-form").classList.remove("active");
+            $("camera-input").disabled = true;
+
+            const form = new FormData();
+            form.append("image", file);
+
+            try {
+                const res = await fetch("/api/scan", { method: "POST", body: form });
+                const data = await res.json();
+                if (res.ok) {
+                    fillForm(data);
+                } else {
+                    alert("Scan failed: " + (data.error || "Unknown error"));
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                $("scan-form").classList.remove("active");
+                $("camera-input").disabled = false;
+                $("camera-input").value = "";
+            }
+        });
+
+        function fillForm(data) {
+            for (const key of ["roastery", "name", "origin", "process", "roast_level", "tasting_notes", "weight"]) {
+                const el = $("f-" + key);
+                if (el) el.value = data[key] || "";
+            }
+            selectedRating = null;
+            document.querySelectorAll(".rating button").forEach(b => b.classList.remove("active"));
+            $("f-notes").value = "";
+            $("review-form").classList.add("active");
+        }
+
+        // Rating buttons
+        $("rating-buttons").addEventListener("click", (e) => {
+            if (e.target.dataset.val) {
+                selectedRating = parseInt(e.target.dataset.val);
+                document.querySelectorAll(".rating button").forEach(b =>
+                    b.classList.toggle("active", parseInt(b.dataset.val) <= selectedRating)
+                );
+            }
+        });
+
+        // Cancel
+        $("cancel-btn").addEventListener("click", () => {
+            $("review-form").classList.remove("active");
+        });
+
+        // Save
+        $("save-btn").addEventListener("click", async () => {
+            const coffee = {
+                roastery: $("f-roastery").value,
+                name: $("f-name").value,
+                origin: $("f-origin").value,
+                process: $("f-process").value,
+                roast_level: $("f-roast_level").value,
+                tasting_notes: $("f-tasting_notes").value,
+                weight: $("f-weight").value,
+                rating: selectedRating,
+                notes: $("f-notes").value,
+            };
+
+            await fetch("/api/coffees", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(coffee),
+            });
+
+            $("review-form").classList.remove("active");
+            loadCoffees();
+        });
+
+        // Delete
+        async function deleteCoffee(id) {
+            if (!confirm("Delete this coffee?")) return;
+            await fetch("/api/coffees/" + id, { method: "DELETE" });
+            loadCoffees();
+        }
+
+        // Load list
+        async function loadCoffees() {
+            const res = await fetch("/api/coffees");
+            const coffees = await res.json();
+            const list = $("coffee-list");
+
+            if (coffees.length === 0) {
+                list.innerHTML = '<p class="empty">No coffees yet. Scan your first bag!</p>';
+                return;
+            }
+
+            list.innerHTML = coffees.map(c => `
+                <div class="coffee-item">
+                    <div class="roastery">${esc(c.roastery || "Unknown roastery")}</div>
+                    <div class="name">${esc(c.name || "Unknown coffee")}</div>
+                    <div class="origin">${esc(c.origin || "")}</div>
+                    ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
+                    <div class="meta">
+                        <span>${c.rating ? '<span class="rating-display">' + "★".repeat(c.rating) + "☆".repeat(5 - c.rating) + '</span>' : ""}</span>
+                        <span>${new Date(c.created_at).toLocaleDateString()}</span>
+                        <button class="delete-btn" onclick="deleteCoffee(${c.id})">delete</button>
+                    </div>
+                    ${c.notes ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.notes)}"</div>` : ""}
+                </div>
+            `).join("");
+        }
+
+        function esc(s) {
+            const d = document.createElement("div");
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        loadCoffees();
+    </script>
+</body>
+</html>
