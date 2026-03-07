@@ -7,6 +7,7 @@ import os
 import base64
 import sqlite3
 import mimetypes
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
@@ -163,6 +164,31 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
     return json.loads(text.strip())
 
 
+def match_roaster(scanned_name: str, db) -> str | None:
+    """Match a scanned roastery name against known roasters in the database."""
+    if not scanned_name:
+        return None
+    rows = db.execute("SELECT DISTINCT roaster FROM coffees WHERE roaster IS NOT NULL").fetchall()
+    if not rows:
+        return None
+    scanned_lower = scanned_name.lower().strip()
+    best_match = None
+    best_ratio = 0.0
+    for row in rows:
+        known = row[0]
+        known_lower = known.lower().strip()
+        ratio = SequenceMatcher(None, scanned_lower, known_lower).ratio()
+        # Substring check: if one contains the other and shorter is >= 4 chars
+        shorter = min(len(scanned_lower), len(known_lower))
+        is_substring = shorter >= 4 and (scanned_lower in known_lower or known_lower in scanned_lower)
+        if (ratio >= 0.7 or is_substring) and ratio > best_ratio:
+            best_ratio = ratio
+            best_match = known
+        elif is_substring and best_match is None:
+            best_match = known
+    return best_match
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -180,8 +206,19 @@ def scan():
         image_data, media_type = prepare_image(f)
         app.logger.info(f"Prepared image, media_type: {media_type}, data length: {len(image_data)}")
         details = extract_coffee_details(image_data, media_type)
+        # Match scanned roastery against known roasters
+        matched_roaster = None
+        scanned_roastery = details.get("roastery") or details.get("roaster")
+        if scanned_roastery:
+            db = get_db()
+            matched_roaster = match_roaster(scanned_roastery, db)
+            db.close()
+            if matched_roaster:
+                details["roastery"] = matched_roaster
         coffee = CoffeeBean.from_scan(details)
-        return jsonify(coffee.to_dict())
+        result = coffee.to_dict()
+        result["matched_roaster"] = matched_roaster
+        return jsonify(result)
     except Exception as e:
         app.logger.error(f"Scan error: {e}")
         return jsonify({"error": str(e)}), 500
