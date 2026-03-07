@@ -305,6 +305,7 @@ def update_coffee(coffee_id):
 @app.route("/api/coffees/<int:coffee_id>", methods=["DELETE"])
 def delete_coffee(coffee_id):
     db = get_db()
+    db.execute("DELETE FROM tastings WHERE coffee_id = ?", (coffee_id,))
     db.execute("DELETE FROM coffees WHERE id = ?", (coffee_id,))
     db.commit()
     db.close()
@@ -337,6 +338,19 @@ def save_tasting():
     tasting.id = cursor.lastrowid
     db.close()
     return jsonify(tasting.to_dict()), 201
+
+
+@app.route("/api/tastings/<int:tasting_id>", methods=["DELETE"])
+def delete_tasting(tasting_id):
+    db = get_db()
+    row = db.execute("SELECT id FROM tastings WHERE id = ?", (tasting_id,)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "Not found"}), 404
+    db.execute("DELETE FROM tastings WHERE id = ?", (tasting_id,))
+    db.commit()
+    db.close()
+    return jsonify({"status": "deleted"})
 
 
 @app.route("/api/tastings", methods=["GET"])

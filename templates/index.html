@@ -541,7 +541,7 @@
         // ── List ──────────────────────────────────────────────────────────────
 
         async function deleteCoffee(id) {
-            if (!confirm("Delete this coffee?")) return;
+            if (!confirm("Delete this coffee and all its tastings?")) return;
             await fetch("/api/coffees/" + id, { method: "DELETE" });
             loadCoffees();
         }
@@ -697,11 +697,23 @@
                         </div>
                         ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
                         ${t.notes ? `<div class="te-notes">"${esc(t.notes)}"</div>` : ""}
+                        <button class="delete-btn" style="margin-top:4px" onclick="deleteTasting(${t.id}, ${coffeeId})">delete</button>
                     </div>
                 `).join("");
             }
             container.style.display = "block";
             btn.textContent = "Hide tastings";
+        }
+
+        async function deleteTasting(tastingId, coffeeId) {
+            if (!confirm("Delete this tasting?")) return;
+            await fetch("/api/tastings/" + tastingId, { method: "DELETE" });
+            // Refresh the tasting history for this coffee
+            const btn = document.querySelector(`#tastings-${coffeeId}`).previousElementSibling;
+            const container = $("tastings-" + coffeeId);
+            container.style.display = "none";
+            toggleTastingHistory(btn, coffeeId);
+            loadCoffees();
         }
 
         function esc(s) {
