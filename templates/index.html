@@ -152,16 +152,29 @@
 
     <div id="review-form" class="card">
         <h2>Review Details</h2>
-        <div class="field"><label>Roastery</label><input id="f-roastery"></div>
+        <div class="field"><label>Roaster</label><input id="f-roaster"></div>
         <div class="field"><label>Coffee Name</label><input id="f-name"></div>
         <div class="field"><label>Origin</label><input id="f-origin"></div>
+        <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
+        <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
         <div class="field"><label>Process</label><input id="f-process"></div>
         <div class="field"><label>Roast Level</label><input id="f-roast_level"></div>
         <div class="field"><label>Tasting Notes</label><input id="f-tasting_notes"></div>
         <div class="field"><label>Weight</label><input id="f-weight"></div>
+        <div class="field"><label>Price</label><input id="f-price"></div>
         <div class="field">
-            <label>Your Rating</label>
-            <div class="rating" id="rating-buttons">
+            <label>Brew Score</label>
+            <div class="rating" id="brew-score-buttons">
+                <button data-val="1">1</button>
+                <button data-val="2">2</button>
+                <button data-val="3">3</button>
+                <button data-val="4">4</button>
+                <button data-val="5">5</button>
+            </div>
+        </div>
+        <div class="field">
+            <label>Espresso Score</label>
+            <div class="rating" id="espresso-score-buttons">
                 <button data-val="1">1</button>
                 <button data-val="2">2</button>
                 <button data-val="3">3</button>
@@ -181,7 +194,8 @@
 
     <script>
         const $ = id => document.getElementById(id);
-        let selectedRating = null;
+        let selectedBrewScore = null;
+        let selectedEspressoScore = null;
 
         // Camera trigger handled by <label for="camera-input">
 
@@ -214,25 +228,32 @@
         });
 
         function fillForm(data) {
-            for (const key of ["roastery", "name", "origin", "process", "roast_level", "tasting_notes", "weight"]) {
+            for (const key of ["roaster", "name", "origin", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price"]) {
                 const el = $("f-" + key);
                 if (el) el.value = data[key] || "";
             }
-            selectedRating = null;
-            document.querySelectorAll(".rating button").forEach(b => b.classList.remove("active"));
+            selectedBrewScore = null;
+            selectedEspressoScore = null;
+            $("brew-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            $("espresso-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("f-notes").value = "";
             $("review-form").classList.add("active");
         }
 
-        // Rating buttons
-        $("rating-buttons").addEventListener("click", (e) => {
-            if (e.target.dataset.val) {
-                selectedRating = parseInt(e.target.dataset.val);
-                document.querySelectorAll(".rating button").forEach(b =>
-                    b.classList.toggle("active", parseInt(b.dataset.val) <= selectedRating)
-                );
-            }
-        });
+        // Score buttons
+        function setupScoreButtons(containerId, setScore) {
+            $(containerId).addEventListener("click", (e) => {
+                if (e.target.dataset.val) {
+                    const val = parseInt(e.target.dataset.val);
+                    setScore(val);
+                    $(containerId).querySelectorAll("button").forEach(b =>
+                        b.classList.toggle("active", parseInt(b.dataset.val) <= val)
+                    );
+                }
+            });
+        }
+        setupScoreButtons("brew-score-buttons", v => selectedBrewScore = v);
+        setupScoreButtons("espresso-score-buttons", v => selectedEspressoScore = v);
 
         // Cancel
         $("cancel-btn").addEventListener("click", () => {
@@ -242,14 +263,18 @@
         // Save
         $("save-btn").addEventListener("click", async () => {
             const coffee = {
-                roastery: $("f-roastery").value,
+                roaster: $("f-roaster").value,
                 name: $("f-name").value,
                 origin: $("f-origin").value,
+                country_grown: $("f-country_grown").value,
+                country_roasted: $("f-country_roasted").value,
                 process: $("f-process").value,
                 roast_level: $("f-roast_level").value,
                 tasting_notes: $("f-tasting_notes").value,
                 weight: $("f-weight").value,
-                rating: selectedRating,
+                price: $("f-price").value,
+                brew_score: selectedBrewScore,
+                espresso_score: selectedEspressoScore,
                 notes: $("f-notes").value,
             };
 
@@ -270,6 +295,13 @@
             loadCoffees();
         }
 
+        function renderScores(c) {
+            const parts = [];
+            if (c.brew_score) parts.push("Brew " + "★".repeat(c.brew_score) + "☆".repeat(5 - c.brew_score));
+            if (c.espresso_score) parts.push("Espresso " + "★".repeat(c.espresso_score) + "☆".repeat(5 - c.espresso_score));
+            return parts.length ? `<span class="rating-display">${parts.join(" &middot; ")}</span>` : "";
+        }
+
         // Load list
         async function loadCoffees() {
             const res = await fetch("/api/coffees");
@@ -283,12 +315,13 @@
 
             list.innerHTML = coffees.map(c => `
                 <div class="coffee-item">
-                    <div class="roastery">${esc(c.roastery || "Unknown roastery")}</div>
+                    <div class="roastery">${esc(c.roaster || "Unknown roaster")}</div>
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
                     <div class="origin">${esc(c.origin || "")}</div>
                     ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
+                    ${c.price ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.price)}</div>` : ""}
                     <div class="meta">
-                        <span>${c.rating ? '<span class="rating-display">' + "★".repeat(c.rating) + "☆".repeat(5 - c.rating) + '</span>' : ""}</span>
+                        <span>${renderScores(c)}</span>
                         <span>${new Date(c.created_at).toLocaleDateString()}</span>
                         <button class="delete-btn" onclick="deleteCoffee(${c.id})">delete</button>
                     </div>

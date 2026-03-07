@@ -2,12 +2,15 @@
 """Scan a coffee bag photo and extract details using Claude's vision."""
 
 import io
+import json
 import sys
 import base64
 import mimetypes
 import anthropic
 from PIL import Image
 import pillow_heif
+
+from models import CoffeeBean
 
 pillow_heif.register_heif_opener()
 
@@ -29,7 +32,7 @@ def load_image(image_path: str) -> tuple[str, str]:
     return base64.standard_b64encode(buf.getvalue()).decode("utf-8"), "image/jpeg"
 
 
-def scan_coffee(image_path: str) -> str:
+def scan_coffee(image_path: str) -> CoffeeBean:
     image_data, media_type = load_image(image_path)
 
     client = anthropic.Anthropic()
@@ -51,23 +54,26 @@ def scan_coffee(image_path: str) -> str:
                     {
                         "type": "text",
                         "text": (
-                            "This is a photo of a coffee bag. Extract the following details if visible:\n"
-                            "- Roastery/Brand\n"
-                            "- Coffee name\n"
-                            "- Origin/Region\n"
-                            "- Process (washed, natural, etc.)\n"
-                            "- Roast level\n"
-                            "- Tasting notes\n"
-                            "- Weight\n"
-                            "- Any other relevant details\n\n"
-                            "If a field is not visible, skip it. Be concise."
+                            "This is a photo of a coffee bag. Extract details and respond with ONLY valid JSON, no markdown:\n"
+                            '{"roastery": "...", "name": "...", "origin": "...", "country_grown": "...", '
+                            '"country_roasted": "...", "process": "...", "roast_level": "...", '
+                            '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
+                            "For origin, list all countries/regions separated by commas if multiple (e.g. a blend). "
+                            "country_grown is the country where the beans were grown. "
+                            "country_roasted is the country where the beans were roasted. "
+                            "Use null for fields you can't find. Be concise."
                         ),
                     },
                 ],
             }
         ],
     )
-    return message.content[0].text
+    text = message.content[0].text
+    if "```" in text:
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    return CoffeeBean.from_scan(json.loads(text.strip()))
 
 
 if __name__ == "__main__":
@@ -75,4 +81,7 @@ if __name__ == "__main__":
         print("Usage: python scan_coffee.py <image_path>")
         sys.exit(1)
 
-    print(scan_coffee(sys.argv[1]))
+    coffee = scan_coffee(sys.argv[1])
+    for key, value in coffee.to_dict().items():
+        if value is not None and key != "id":
+            print(f"{key}: {value}")

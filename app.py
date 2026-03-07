@@ -18,6 +18,8 @@ from flask import Flask, render_template, request, jsonify
 from PIL import Image
 import pillow_heif
 
+from models import CoffeeBean
+
 pillow_heif.register_heif_opener()
 
 app = Flask(__name__)
@@ -37,19 +39,39 @@ def init_db():
     db.execute("""
         CREATE TABLE IF NOT EXISTS coffees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            roastery TEXT,
+            roaster TEXT,
             name TEXT,
+            country_grown TEXT,
+            country_roasted TEXT,
             origin TEXT,
             process TEXT,
             roast_level TEXT,
             tasting_notes TEXT,
             weight TEXT,
+            price TEXT,
+            brew_score INTEGER,
+            espresso_score INTEGER,
             other TEXT,
-            rating INTEGER,
             notes TEXT,
             created_at TEXT NOT NULL
         )
     """)
+    # Migrate old schema if needed
+    columns = {row[1] for row in db.execute("PRAGMA table_info(coffees)").fetchall()}
+    migrations = {
+        "roaster": "TEXT",
+        "country_grown": "TEXT",
+        "country_roasted": "TEXT",
+        "price": "TEXT",
+        "brew_score": "INTEGER",
+        "espresso_score": "INTEGER",
+    }
+    for col, col_type in migrations.items():
+        if col not in columns:
+            db.execute(f"ALTER TABLE coffees ADD COLUMN {col} {col_type}")
+    # Migrate rating → brew_score
+    if "rating" in columns and "brew_score" in migrations:
+        db.execute("UPDATE coffees SET brew_score = rating WHERE brew_score IS NULL AND rating IS NOT NULL")
     db.commit()
     db.close()
 
@@ -90,9 +112,12 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                         "type": "text",
                         "text": (
                             "This is a photo of a coffee bag. Extract details and respond with ONLY valid JSON, no markdown:\n"
-                            '{"roastery": "...", "name": "...", "origin": "...", "process": "...", '
-                            '"roast_level": "...", "tasting_notes": "...", "weight": "...", "other": "..."}\n'
+                            '{"roastery": "...", "name": "...", "origin": "...", "country_grown": "...", '
+                            '"country_roasted": "...", "process": "...", "roast_level": "...", '
+                            '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
                             "For origin, list all countries/regions separated by commas if multiple (e.g. a blend). "
+                            "country_grown is the country where the beans were grown. "
+                            "country_roasted is the country where the beans were roasted. "
                             "Use null for fields you can't find. Be concise."
                         ),
                     },
@@ -126,7 +151,8 @@ def scan():
         image_data, media_type = prepare_image(f)
         app.logger.info(f"Prepared image, media_type: {media_type}, data length: {len(image_data)}")
         details = extract_coffee_details(image_data, media_type)
-        return jsonify(details)
+        coffee = CoffeeBean.from_scan(details)
+        return jsonify(coffee.to_dict())
     except Exception as e:
         app.logger.error(f"Scan error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -137,31 +163,33 @@ def list_coffees():
     db = get_db()
     rows = db.execute("SELECT * FROM coffees ORDER BY created_at DESC").fetchall()
     db.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([CoffeeBean.from_row(r).to_dict() for r in rows])
 
 
 @app.route("/api/coffees", methods=["POST"])
 def save_coffee():
     data = request.json
-    db = get_db()
-    db.execute(
-        """INSERT INTO coffees (roastery, name, origin, process, roast_level,
-           tasting_notes, weight, other, rating, notes, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            data.get("roastery"),
-            data.get("name"),
-            data.get("origin"),
-            data.get("process"),
-            data.get("roast_level"),
-            data.get("tasting_notes"),
-            data.get("weight"),
-            data.get("other"),
-            data.get("rating"),
-            data.get("notes"),
-            datetime.now(timezone.utc).isoformat(),
-        ),
+    coffee = CoffeeBean(
+        roaster=data.get("roaster"),
+        name=data.get("name"),
+        country_grown=data.get("country_grown"),
+        country_roasted=data.get("country_roasted"),
+        origin=data.get("origin"),
+        process=data.get("process"),
+        roast_level=data.get("roast_level"),
+        tasting_notes=data.get("tasting_notes"),
+        weight=data.get("weight"),
+        price=data.get("price"),
+        brew_score=data.get("brew_score"),
+        espresso_score=data.get("espresso_score"),
+        other=data.get("other"),
+        notes=data.get("notes"),
     )
+    row = coffee.to_row()
+    columns = ", ".join(row.keys())
+    placeholders = ", ".join("?" for _ in row)
+    db = get_db()
+    db.execute(f"INSERT INTO coffees ({columns}) VALUES ({placeholders})", list(row.values()))
     db.commit()
     db.close()
     return jsonify({"status": "saved"}), 201
