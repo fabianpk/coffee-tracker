@@ -9,8 +9,10 @@ Coffee Tracker is a web app for scanning coffee bag photos with Claude's vision 
 ## Commands
 
 - **Install dependencies:** `uv sync`
-- **Run web app:** `uv run python app.py` (serves on `http://0.0.0.0:5555`)
+- **Run web app (service):** `sudo systemctl start coffee-tracker` (serves on `http://0.0.0.0:5555`)
+- **Run web app (manual):** `uv run python app.py`
 - **Run CLI scanner:** `uv run python scan_coffee.py <image_path>`
+- **Service file:** `coffee-tracker.service` (installed at `/etc/systemd/system/`)
 
 No test suite exists yet.
 

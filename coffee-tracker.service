@@ -1,0 +1,15 @@
+[Unit]
+Description=Coffee Tracker Web App
+After=network.target
+
+[Service]
+Type=simple
+User=fabian
+WorkingDirectory=/home/fabian/code/coffee-tracker
+ExecStart=/home/fabian/.local/bin/uv run python app.py
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/home/fabian/code/coffee-tracker/.env
+
+[Install]
+WantedBy=multi-user.target

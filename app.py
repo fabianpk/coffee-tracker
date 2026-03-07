@@ -207,4 +207,5 @@ def delete_coffee(coffee_id):
 init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5555, debug=True)
+    debug = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=5555, debug=debug)

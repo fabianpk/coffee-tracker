@@ -19,11 +19,22 @@ echo "ANTHROPIC_API_KEY=your-key-here" > .env
 
 ### Web app
 
+The app runs as a systemd service and starts automatically on boot:
+
 ```bash
-uv run python app.py
+sudo systemctl start coffee-tracker   # start
+sudo systemctl stop coffee-tracker    # stop
+sudo systemctl restart coffee-tracker # restart after code changes
+sudo journalctl -u coffee-tracker -f  # follow logs
 ```
 
 Opens at `http://localhost:5555`. Scan a coffee bag photo to extract details (roaster, origin, tasting notes, etc.), review and edit the results, then save to your collection. Supports brew and espresso scoring.
+
+To run manually during development:
+
+```bash
+uv run python app.py
+```
 
 ### CLI scanner
 
