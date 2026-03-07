@@ -19,20 +19,23 @@
         h1 { text-align: center; margin: 16px 0; font-size: 24px; }
         h2 { font-size: 18px; margin: 20px 0 12px; }
 
-        .scan-btn {
-            display: block;
-            width: 100%;
+        .top-buttons { display: flex; gap: 8px; margin-bottom: 8px; }
+        .scan-btn, .tasting-btn {
+            flex: 1;
             padding: 16px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
-            background: #8B5E3C;
             color: white;
             border: none;
             border-radius: 12px;
             cursor: pointer;
+            text-align: center;
         }
+        .scan-btn { background: #8B5E3C; }
         .scan-btn:active { background: #6d4a2f; }
         .scan-btn:disabled { background: #555; cursor: wait; }
+        .tasting-btn { background: #2e7d32; }
+        .tasting-btn:active { background: #1b5e20; }
 
         #camera-input { display: none; }
 
@@ -203,12 +206,81 @@
             margin-top: 8px;
         }
         .btn-rescan:disabled { opacity: 0.5; cursor: wait; }
+
+        /* Tasting modal */
+        #tasting-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        #tasting-modal.active { display: flex; }
+        .tasting-modal-content {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            width: 100%;
+            max-width: 460px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .tasting-modal-content h2 { margin-bottom: 12px; }
+        .brew-type-buttons { display: flex; gap: 8px; margin: 8px 0; }
+        .brew-type-buttons button {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 2px solid #555;
+            border-radius: 10px;
+            background: #333;
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+        .brew-type-buttons button.active {
+            border-color: #8B5E3C;
+            background: #8B5E3C;
+            color: white;
+        }
+
+        /* Tasting history */
+        .tasting-toggle {
+            background: none;
+            border: none;
+            color: #8B5E3C;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 0;
+            margin-top: 6px;
+        }
+        .tasting-history { margin-top: 8px; }
+        .tasting-entry {
+            background: #222;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin: 4px 0;
+            font-size: 13px;
+        }
+        .tasting-entry .te-header {
+            display: flex;
+            justify-content: space-between;
+            color: #aaa;
+        }
+        .tasting-entry .te-score { color: #8B5E3C; font-weight: 600; }
+        .tasting-entry .te-notes { color: #999; font-style: italic; margin-top: 2px; }
     </style>
 </head>
 <body>
     <h1>Coffee Tracker</h1>
 
-    <label class="scan-btn" for="camera-input">Scan Coffee Bag</label>
+    <div class="top-buttons">
+        <label class="scan-btn" for="camera-input">Scan Coffee</label>
+        <button class="tasting-btn" id="tasting-btn">Conduct Tasting</button>
+    </div>
     <input type="file" id="camera-input" accept="image/*">
 
     <div id="scan-form" class="card">
@@ -227,26 +299,6 @@
         <div class="field"><label>Tasting Notes</label><input id="f-tasting_notes"></div>
         <div class="field"><label>Weight</label><input id="f-weight"></div>
         <div class="field"><label>Price</label><input id="f-price"></div>
-        <div class="field">
-            <label>Brew Score</label>
-            <div class="rating" id="brew-score-buttons">
-                <button data-val="1">1</button>
-                <button data-val="2">2</button>
-                <button data-val="3">3</button>
-                <button data-val="4">4</button>
-                <button data-val="5">5</button>
-            </div>
-        </div>
-        <div class="field">
-            <label>Espresso Score</label>
-            <div class="rating" id="espresso-score-buttons">
-                <button data-val="1">1</button>
-                <button data-val="2">2</button>
-                <button data-val="3">3</button>
-                <button data-val="4">4</button>
-                <button data-val="5">5</button>
-            </div>
-        </div>
         <div class="field"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
         <div class="field"><label>Your Notes</label><textarea id="f-notes" placeholder="How was it?"></textarea></div>
         <div class="actions">
@@ -271,22 +323,6 @@
         <div class="field"><label>Tasting Notes</label><input id="d-tasting_notes"></div>
         <div class="field"><label>Weight</label><input id="d-weight"></div>
         <div class="field"><label>Price</label><input id="d-price"></div>
-        <div class="field">
-            <label>Brew Score</label>
-            <div class="rating" id="d-brew-score-buttons">
-                <button data-val="1">1</button><button data-val="2">2</button>
-                <button data-val="3">3</button><button data-val="4">4</button>
-                <button data-val="5">5</button>
-            </div>
-        </div>
-        <div class="field">
-            <label>Espresso Score</label>
-            <div class="rating" id="d-espresso-score-buttons">
-                <button data-val="1">1</button><button data-val="2">2</button>
-                <button data-val="3">3</button><button data-val="4">4</button>
-                <button data-val="5">5</button>
-            </div>
-        </div>
         <div class="field"><label>Other (markdown)</label><textarea id="d-other" style="min-height:80px"></textarea></div>
         <div class="field"><label>Your Notes</label><textarea id="d-notes" placeholder="How was it?"></textarea></div>
         <div class="actions">
@@ -298,13 +334,52 @@
         <input type="file" id="rescan-input" accept="image/*" style="display:none">
     </div>
 
+    <!-- Tasting modal -->
+    <div id="tasting-modal">
+        <div class="tasting-modal-content">
+            <h2>Conduct Tasting</h2>
+            <div class="field">
+                <label>Coffee</label>
+                <select id="t-coffee" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
+                    <option value="">Select a coffee...</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Brew Type</label>
+                <div class="brew-type-buttons" id="t-brew-type-buttons">
+                    <button data-val="espresso">Espresso</button>
+                    <button data-val="brew">Brew</button>
+                </div>
+            </div>
+            <div class="field">
+                <label>Dosage</label>
+                <select id="t-dosage" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
+                    <option value="">Select dosage...</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Score</label>
+                <div class="rating" id="t-score-buttons">
+                    <button data-val="1">1</button>
+                    <button data-val="2">2</button>
+                    <button data-val="3">3</button>
+                    <button data-val="4">4</button>
+                    <button data-val="5">5</button>
+                </div>
+            </div>
+            <div class="field"><label>Notes</label><textarea id="t-notes" placeholder="How was it?" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px;font-family:inherit;resize:vertical;min-height:60px"></textarea></div>
+            <div class="actions">
+                <button class="btn-cancel" id="tasting-cancel-btn">Cancel</button>
+                <button class="btn-save" id="tasting-save-btn">Save Tasting</button>
+            </div>
+        </div>
+    </div>
+
     <h2>My Coffees</h2>
     <div id="coffee-list"><p class="empty">No coffees yet. Scan your first bag!</p></div>
 
     <script>
         const $ = id => document.getElementById(id);
-        let selectedBrewScore = null;
-        let selectedEspressoScore = null;
 
         // ── Initial scan ──────────────────────────────────────────────────────
 
@@ -341,27 +416,9 @@
                 const el = $("f-" + key);
                 if (el) el.value = data[key] || "";
             }
-            selectedBrewScore = null;
-            selectedEspressoScore = null;
-            $("brew-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
-            $("espresso-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("f-notes").value = "";
             $("review-form").classList.add("active");
         }
-
-        function setupScoreButtons(containerId, setScore) {
-            $(containerId).addEventListener("click", (e) => {
-                if (e.target.dataset.val) {
-                    const val = parseInt(e.target.dataset.val);
-                    setScore(val);
-                    $(containerId).querySelectorAll("button").forEach(b =>
-                        b.classList.toggle("active", parseInt(b.dataset.val) <= val)
-                    );
-                }
-            });
-        }
-        setupScoreButtons("brew-score-buttons", v => selectedBrewScore = v);
-        setupScoreButtons("espresso-score-buttons", v => selectedEspressoScore = v);
 
         $("cancel-btn").addEventListener("click", () => {
             $("review-form").classList.remove("active");
@@ -379,8 +436,6 @@
                 tasting_notes: $("f-tasting_notes").value,
                 weight: $("f-weight").value,
                 price: $("f-price").value,
-                brew_score: selectedBrewScore,
-                espresso_score: selectedEspressoScore,
                 other: $("f-other").value,
                 notes: $("f-notes").value,
             };
@@ -396,16 +451,12 @@
         // ── Detail panel ──────────────────────────────────────────────────────
 
         let detailCoffeeId = null;
-        let detailBrewScore = null;
-        let detailEspressoScore = null;
         const DETAIL_TEXT_FIELDS = ["roaster", "name", "origin", "country_grown", "country_roasted",
                                     "process", "roast_level", "tasting_notes", "weight", "price", "other", "notes"];
 
         function detailSnapshot() {
             const snap = {};
             for (const key of DETAIL_TEXT_FIELDS) snap[key] = $("d-" + key).value;
-            snap.brew_score = detailBrewScore;
-            snap.espresso_score = detailEspressoScore;
             return JSON.stringify(snap);
         }
 
@@ -416,34 +467,9 @@
             for (const key of DETAIL_TEXT_FIELDS) {
                 $("d-" + key).value = coffee[key] || "";
             }
-            // Set score buttons
-            detailBrewScore = coffee.brew_score || null;
-            detailEspressoScore = coffee.espresso_score || null;
-            setDetailScore("d-brew-score-buttons", detailBrewScore, v => detailBrewScore = v);
-            setDetailScore("d-espresso-score-buttons", detailEspressoScore, v => detailEspressoScore = v);
-
             detailOriginalSnapshot = detailSnapshot();
             $("detail-panel").classList.add("active");
             $("detail-panel").scrollTop = 0;
-        }
-
-        function setDetailScore(containerId, currentVal, setter) {
-            const container = $(containerId);
-            container.querySelectorAll("button").forEach(b => {
-                b.classList.toggle("active", currentVal && parseInt(b.dataset.val) <= currentVal);
-            });
-            // re-wire click (remove old listener by replacing node)
-            const fresh = container.cloneNode(true);
-            container.parentNode.replaceChild(fresh, container);
-            fresh.addEventListener("click", (e) => {
-                if (e.target.dataset.val) {
-                    const val = parseInt(e.target.dataset.val);
-                    setter(val);
-                    fresh.querySelectorAll("button").forEach(b =>
-                        b.classList.toggle("active", parseInt(b.dataset.val) <= val)
-                    );
-                }
-            });
         }
 
         function closeDetail() {
@@ -459,8 +485,6 @@
         $("detail-save-btn").addEventListener("click", async () => {
             const coffee = { created_at: "" };
             for (const key of DETAIL_TEXT_FIELDS) coffee[key] = $("d-" + key).value;
-            coffee.brew_score = detailBrewScore;
-            coffee.espresso_score = detailEspressoScore;
 
             const res = await fetch("/api/coffees/" + detailCoffeeId, {
                 method: "PUT",
@@ -505,14 +529,6 @@
                         $("d-" + key).value = data[key];
                     }
                 }
-                if (data.brew_score && !detailBrewScore) {
-                    detailBrewScore = data.brew_score;
-                    setDetailScore("d-brew-score-buttons", detailBrewScore, v => detailBrewScore = v);
-                }
-                if (data.espresso_score && !detailEspressoScore) {
-                    detailEspressoScore = data.espresso_score;
-                    setDetailScore("d-espresso-score-buttons", detailEspressoScore, v => detailEspressoScore = v);
-                }
             } catch (err) {
                 alert("Error: " + err.message);
             } finally {
@@ -530,11 +546,9 @@
             loadCoffees();
         }
 
-        function renderScores(c) {
-            const parts = [];
-            if (c.brew_score) parts.push("Brew " + "★".repeat(c.brew_score) + "☆".repeat(5 - c.brew_score));
-            if (c.espresso_score) parts.push("Espresso " + "★".repeat(c.espresso_score) + "☆".repeat(5 - c.espresso_score));
-            return parts.length ? `<span class="rating-display">${parts.join(" &middot; ")}</span>` : "";
+        function renderAvgScore(c) {
+            if (c.average_score == null) return '<span class="rating-display">&ndash;</span>';
+            return `<span class="rating-display">${c.average_score} ★</span>`;
         }
 
         let coffeeCache = [];
@@ -557,12 +571,14 @@
                     ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
                     ${c.price ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.price)}</div>` : ""}
                     <div class="meta">
-                        <span>${renderScores(c)}</span>
+                        <span>${renderAvgScore(c)}</span>
                         <span>${new Date(c.created_at).toLocaleDateString()}</span>
                         <button class="delete-btn" onclick="event.stopPropagation(); deleteCoffee(${c.id})">delete</button>
                     </div>
                     ${c.notes ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.notes)}"</div>` : ""}
                     ${c.other ? `<div class="other-md">${marked.parse(c.other)}</div>` : ""}
+                    <button class="tasting-toggle" onclick="event.stopPropagation(); toggleTastingHistory(this, ${c.id})">Show tastings</button>
+                    <div class="tasting-history" id="tastings-${c.id}" style="display:none"></div>
                 </div>
             `).join("");
 
@@ -572,6 +588,120 @@
                     if (coffee) openDetail(coffee);
                 });
             });
+        }
+
+        // ── Tasting modal ────────────────────────────────────────────────────
+
+        let selectedBrewType = null;
+        let selectedTastingScore = null;
+
+        // Populate dosage dropdown (10.0 to 20.0 in 0.1 increments)
+        (function() {
+            const sel = $("t-dosage");
+            for (let d = 10.0; d <= 20.0; d = Math.round((d + 0.1) * 10) / 10) {
+                const opt = document.createElement("option");
+                opt.value = d;
+                opt.textContent = d.toFixed(1) + "gr";
+                sel.appendChild(opt);
+            }
+        })();
+
+        $("tasting-btn").addEventListener("click", async () => {
+            // Populate coffee dropdown
+            const sel = $("t-coffee");
+            sel.innerHTML = '<option value="">Select a coffee...</option>';
+            const res = await fetch("/api/coffees");
+            const coffees = await res.json();
+            coffees.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.id;
+                opt.textContent = (c.roaster || "Unknown") + " - " + (c.name || "Unknown");
+                sel.appendChild(opt);
+            });
+            // Reset form
+            selectedBrewType = null;
+            selectedTastingScore = null;
+            $("t-brew-type-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            $("t-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            $("t-dosage").value = "";
+            $("t-notes").value = "";
+            $("tasting-modal").classList.add("active");
+        });
+
+        $("t-brew-type-buttons").addEventListener("click", (e) => {
+            if (e.target.dataset.val) {
+                selectedBrewType = e.target.dataset.val;
+                $("t-brew-type-buttons").querySelectorAll("button").forEach(b =>
+                    b.classList.toggle("active", b.dataset.val === selectedBrewType)
+                );
+            }
+        });
+
+        $("t-score-buttons").addEventListener("click", (e) => {
+            if (e.target.dataset.val) {
+                selectedTastingScore = parseInt(e.target.dataset.val);
+                $("t-score-buttons").querySelectorAll("button").forEach(b =>
+                    b.classList.toggle("active", parseInt(b.dataset.val) <= selectedTastingScore)
+                );
+            }
+        });
+
+        $("tasting-cancel-btn").addEventListener("click", () => {
+            $("tasting-modal").classList.remove("active");
+        });
+
+        $("tasting-save-btn").addEventListener("click", async () => {
+            const coffeeId = $("t-coffee").value;
+            if (!coffeeId) { alert("Please select a coffee"); return; }
+            const dosageVal = $("t-dosage").value;
+            const tasting = {
+                coffee_id: parseInt(coffeeId),
+                brew_type: selectedBrewType,
+                dosage: dosageVal ? parseFloat(dosageVal) : null,
+                score: selectedTastingScore,
+                notes: $("t-notes").value || null,
+            };
+            const res = await fetch("/api/tastings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(tasting),
+            });
+            if (res.ok) {
+                $("tasting-modal").classList.remove("active");
+                loadCoffees();
+            } else {
+                const err = await res.json();
+                alert("Error: " + (err.error || "Save failed"));
+            }
+        });
+
+        // ── Tasting history ─────────────────────────────────────────────────
+
+        async function toggleTastingHistory(btn, coffeeId) {
+            const container = $("tastings-" + coffeeId);
+            if (container.style.display !== "none") {
+                container.style.display = "none";
+                btn.textContent = "Show tastings";
+                return;
+            }
+            const res = await fetch("/api/tastings?coffee_id=" + coffeeId);
+            const tastings = await res.json();
+            if (tastings.length === 0) {
+                container.innerHTML = '<div class="tasting-entry" style="color:#666">No tastings yet</div>';
+            } else {
+                container.innerHTML = tastings.map(t => `
+                    <div class="tasting-entry">
+                        <div class="te-header">
+                            <span>${esc(t.brew_type || "–")}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}</span>
+                            <span>${new Date(t.created_at).toLocaleDateString()}</span>
+                        </div>
+                        ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
+                        ${t.notes ? `<div class="te-notes">"${esc(t.notes)}"</div>` : ""}
+                    </div>
+                `).join("");
+            }
+            container.style.display = "block";
+            btn.textContent = "Hide tastings";
         }
 
         function esc(s) {

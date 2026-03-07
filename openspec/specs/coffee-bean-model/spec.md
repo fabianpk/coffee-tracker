@@ -14,11 +14,11 @@ The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the follow
 | `tasting_notes` | `str \| None` |
 | `weight` | `str \| None` |
 | `price` | `str \| None` |
-| `brew_score` | `int \| None` |
-| `espresso_score` | `int \| None` |
 | `other` | `str \| None` |
 | `notes` | `str \| None` |
 | `created_at` | `str` |
+
+`brew_score` and `espresso_score` are removed from the dataclass. Scores are now tracked via `Tasting` records.
 
 #### Scenario: Create a CoffeeBean with all fields
 - **WHEN** a `CoffeeBean` is instantiated with all properties set
@@ -31,9 +31,9 @@ The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the follow
 ### Requirement: CoffeeBean database serialization
 The `CoffeeBean` class SHALL provide methods to convert to and from database rows.
 
-- `to_row()` SHALL return a dict of column names to values suitable for SQL INSERT.
-- `from_row(row)` SHALL be a classmethod that accepts a `sqlite3.Row` and returns a `CoffeeBean` instance.
-- `to_dict()` SHALL return a dict suitable for JSON serialization (used in API responses).
+- `to_row()` SHALL return a dict of column names to values suitable for SQL INSERT. It SHALL NOT include `brew_score` or `espresso_score`.
+- `from_row(row)` SHALL be a classmethod that accepts a `sqlite3.Row` and returns a `CoffeeBean` instance. It SHALL silently ignore any `brew_score`/`espresso_score` columns present in old rows.
+- `to_dict()` SHALL return a dict suitable for JSON serialization. It SHALL include `average_score` (passed in as a parameter or defaulting to `None`) but NOT `brew_score` or `espresso_score`.
 
 #### Scenario: Round-trip through to_row and from_row
 - **WHEN** a `CoffeeBean` is converted via `to_row()`, inserted into the database, read back as a `sqlite3.Row`, and converted via `CoffeeBean.from_row(row)`
@@ -42,6 +42,10 @@ The `CoffeeBean` class SHALL provide methods to convert to and from database row
 #### Scenario: to_dict produces JSON-safe output
 - **WHEN** `to_dict()` is called on a `CoffeeBean`
 - **THEN** the result SHALL be a plain dict with string keys, and all values SHALL be JSON-serializable
+
+#### Scenario: from_row on old schema row with brew_score column
+- **WHEN** `CoffeeBean.from_row(row)` is called on a row that contains `brew_score` and `espresso_score` columns
+- **THEN** no error SHALL be raised and those column values SHALL be ignored
 
 ### Requirement: CoffeeBean from scan result
 The `CoffeeBean` class SHALL provide a classmethod `from_scan(data: dict)` that maps Claude API scan output to a `CoffeeBean` instance. The scan dict uses key `roastery` which SHALL be mapped to the `roaster` property.
@@ -53,17 +57,6 @@ The `CoffeeBean` class SHALL provide a classmethod `from_scan(data: dict)` that 
 #### Scenario: Missing fields in scan output
 - **WHEN** `CoffeeBean.from_scan({})` is called with an empty dict
 - **THEN** all properties SHALL be `None` (no KeyError raised)
-
-### Requirement: Database schema includes all CoffeeBean fields
-The SQLite `coffees` table SHALL have columns matching all `CoffeeBean` properties: `id`, `roaster`, `name`, `country_grown`, `country_roasted`, `origin`, `process`, `roast_level`, `tasting_notes`, `weight`, `price`, `brew_score`, `espresso_score`, `other`, `notes`, `created_at`.
-
-#### Scenario: Fresh database initialization
-- **WHEN** the app starts with no existing `coffees.db`
-- **THEN** the `coffees` table SHALL be created with all columns listed above
-
-#### Scenario: Migration from old schema
-- **WHEN** the app starts with an existing `coffees` table that has a `rating` column but no `brew_score` column
-- **THEN** the system SHALL add the missing columns and copy `rating` values into `brew_score`
 
 ### Requirement: Route handlers use CoffeeBean
 All API route handlers (`POST /api/scan`, `GET /api/coffees`, `POST /api/coffees`, `DELETE /api/coffees/<id>`) SHALL use `CoffeeBean` instances for data handling instead of raw dicts.

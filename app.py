@@ -18,7 +18,7 @@ from flask import Flask, render_template, request, jsonify
 from PIL import Image
 import pillow_heif
 
-from models import CoffeeBean
+from models import CoffeeBean, Tasting
 
 pillow_heif.register_heif_opener()
 
@@ -52,6 +52,17 @@ def init_db():
             brew_score INTEGER,
             espresso_score INTEGER,
             other TEXT,
+            notes TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS tastings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            coffee_id INTEGER NOT NULL REFERENCES coffees(id),
+            brew_type TEXT,
+            dosage REAL,
+            score INTEGER,
             notes TEXT,
             created_at TEXT NOT NULL
         )
@@ -180,8 +191,12 @@ def scan():
 def list_coffees():
     db = get_db()
     rows = db.execute("SELECT * FROM coffees ORDER BY created_at DESC").fetchall()
+    coffees = []
+    for r in rows:
+        avg = db.execute("SELECT ROUND(AVG(score), 1) FROM tastings WHERE coffee_id = ?", (r["id"],)).fetchone()[0]
+        coffees.append(CoffeeBean.from_row(r).to_dict(average_score=avg))
     db.close()
-    return jsonify([CoffeeBean.from_row(r).to_dict() for r in rows])
+    return jsonify(coffees)
 
 
 @app.route("/api/coffees", methods=["POST"])
@@ -198,8 +213,6 @@ def save_coffee():
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        brew_score=data.get("brew_score"),
-        espresso_score=data.get("espresso_score"),
         other=data.get("other"),
         notes=data.get("notes"),
     )
@@ -238,8 +251,6 @@ def update_coffee(coffee_id):
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        brew_score=data.get("brew_score"),
-        espresso_score=data.get("espresso_score"),
         other=data.get("other"),
         notes=data.get("notes"),
         created_at=data.get("created_at", ""),
@@ -261,6 +272,46 @@ def delete_coffee(coffee_id):
     db.commit()
     db.close()
     return jsonify({"status": "deleted"})
+
+
+@app.route("/api/tastings", methods=["POST"])
+def save_tasting():
+    data = request.json
+    coffee_id = data.get("coffee_id")
+    if not coffee_id:
+        return jsonify({"error": "coffee_id is required"}), 400
+    db = get_db()
+    exists = db.execute("SELECT id FROM coffees WHERE id = ?", (coffee_id,)).fetchone()
+    if not exists:
+        db.close()
+        return jsonify({"error": "Coffee not found"}), 400
+    tasting = Tasting(
+        coffee_id=coffee_id,
+        brew_type=data.get("brew_type"),
+        dosage=data.get("dosage"),
+        score=data.get("score"),
+        notes=data.get("notes"),
+    )
+    row = tasting.to_row()
+    columns = ", ".join(row.keys())
+    placeholders = ", ".join("?" for _ in row)
+    cursor = db.execute(f"INSERT INTO tastings ({columns}) VALUES ({placeholders})", list(row.values()))
+    db.commit()
+    tasting.id = cursor.lastrowid
+    db.close()
+    return jsonify(tasting.to_dict()), 201
+
+
+@app.route("/api/tastings", methods=["GET"])
+def list_tastings():
+    coffee_id = request.args.get("coffee_id")
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM tastings WHERE coffee_id = ? ORDER BY created_at DESC",
+        (coffee_id,),
+    ).fetchall()
+    db.close()
+    return jsonify([Tasting.from_row(r).to_dict() for r in rows])
 
 
 init_db()
