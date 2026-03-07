@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: CoffeeBean dataclass definition
 The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the following properties, all optional (nullable) except `id` and `created_at`:
 
@@ -31,25 +33,6 @@ The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the follow
 - **WHEN** `CoffeeBean.from_row(row)` is called on a row that contains an `origin` column
 - **THEN** no error SHALL be raised and the `origin` value SHALL be ignored
 
-### Requirement: CoffeeBean database serialization
-The `CoffeeBean` class SHALL provide methods to convert to and from database rows.
-
-- `to_row()` SHALL return a dict of column names to values suitable for SQL INSERT. It SHALL NOT include `brew_score` or `espresso_score`.
-- `from_row(row)` SHALL be a classmethod that accepts a `sqlite3.Row` and returns a `CoffeeBean` instance. It SHALL silently ignore any `brew_score`/`espresso_score` columns present in old rows.
-- `to_dict()` SHALL return a dict suitable for JSON serialization. It SHALL include `average_score` (passed in as a parameter or defaulting to `None`) but NOT `brew_score` or `espresso_score`.
-
-#### Scenario: Round-trip through to_row and from_row
-- **WHEN** a `CoffeeBean` is converted via `to_row()`, inserted into the database, read back as a `sqlite3.Row`, and converted via `CoffeeBean.from_row(row)`
-- **THEN** the resulting `CoffeeBean` SHALL have identical property values to the original (except `id`, which is assigned by the database)
-
-#### Scenario: to_dict produces JSON-safe output
-- **WHEN** `to_dict()` is called on a `CoffeeBean`
-- **THEN** the result SHALL be a plain dict with string keys, and all values SHALL be JSON-serializable
-
-#### Scenario: from_row on old schema row with brew_score column
-- **WHEN** `CoffeeBean.from_row(row)` is called on a row that contains `brew_score` and `espresso_score` columns
-- **THEN** no error SHALL be raised and those column values SHALL be ignored
-
 ### Requirement: CoffeeBean from scan result
 The `CoffeeBean` class SHALL provide a classmethod `from_scan(data: dict)` that maps Claude API scan output to a `CoffeeBean` instance. The scan dict uses key `roastery` which SHALL be mapped to the `roaster` property. If the scan data contains an `origin` key and `country_grown` is empty/null, `origin` SHALL be mapped to `country_grown` as a fallback.
 
@@ -64,17 +47,6 @@ The `CoffeeBean` class SHALL provide a classmethod `from_scan(data: dict)` that 
 #### Scenario: Origin ignored when country_grown is set
 - **WHEN** `CoffeeBean.from_scan({"origin": "Ethiopia", "country_grown": "Kenya"})` is called
 - **THEN** `country_grown` SHALL remain `"Kenya"` and `origin` SHALL be discarded
-
-### Requirement: Route handlers use CoffeeBean
-All API route handlers (`POST /api/scan`, `GET /api/coffees`, `POST /api/coffees`, `DELETE /api/coffees/<id>`) SHALL use `CoffeeBean` instances for data handling instead of raw dicts.
-
-#### Scenario: Scan endpoint returns CoffeeBean-shaped response
-- **WHEN** a POST to `/api/scan` succeeds
-- **THEN** the response JSON SHALL include the new fields (`country_grown`, `country_roasted`, `price`) alongside existing ones
-
-#### Scenario: Save endpoint accepts new fields
-- **WHEN** a POST to `/api/coffees` includes `brew_score`, `espresso_score`, `price`, `country_grown`, and `country_roasted`
-- **THEN** all fields SHALL be persisted to the database
 
 ### Requirement: Updated Claude vision prompt
 The Claude vision prompt SHALL NOT request `origin`. The prompt SHALL request `country_grown` with the instruction: "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend)."

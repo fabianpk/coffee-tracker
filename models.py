@@ -11,7 +11,6 @@ class CoffeeBean:
     name: str | None = None
     country_grown: str | None = None
     country_roasted: str | None = None
-    origin: str | None = None
     process: str | None = None
     roast_level: str | None = None
     tasting_notes: str | None = None
@@ -43,10 +42,15 @@ class CoffeeBean:
 
     @classmethod
     def from_scan(cls, data: dict) -> "CoffeeBean":
-        """Create a CoffeeBean from Claude scan output. Maps 'roastery' to 'roaster'."""
+        """Create a CoffeeBean from Claude scan output. Maps 'roastery' to 'roaster' and 'origin' to 'country_grown' as fallback."""
         mapped = dict(data)
         if "roastery" in mapped:
             mapped["roaster"] = mapped.pop("roastery")
+        # Fallback: map origin to country_grown if country_grown is empty
+        if "origin" in mapped and not mapped.get("country_grown"):
+            mapped["country_grown"] = mapped.pop("origin")
+        elif "origin" in mapped:
+            del mapped["origin"]
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in mapped.items() if k in known})
 

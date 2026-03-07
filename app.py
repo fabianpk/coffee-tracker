@@ -141,11 +141,10 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                         "text": (
                             "This is a photo of a coffee bag. Labels are often in Swedish — read all text carefully and transcribe it exactly as printed, do not translate or guess. "
                             "Respond with ONLY valid JSON, no markdown:\n"
-                            '{"roastery": "...", "name": "...", "origin": "...", "country_grown": "...", '
+                            '{"roastery": "...", "name": "...", "country_grown": "...", '
                             '"country_roasted": "...", "process": "...", "roast_level": "...", '
                             '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
-                            "For origin, list all countries/regions separated by commas if multiple (e.g. a blend). "
-                            "country_grown is the country where the beans were grown. "
+                            "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend). "
                             "country_roasted is the country where the beans were roasted. "
                             "For tasting_notes, copy the exact words from the bag (e.g. 'Björnbär / Röd Grapefrukt / Tranbär'). "
                             "Use null for fields you can't find. Be concise."
@@ -244,7 +243,6 @@ def save_coffee():
         name=data.get("name"),
         country_grown=data.get("country_grown"),
         country_roasted=data.get("country_roasted"),
-        origin=data.get("origin"),
         process=data.get("process"),
         roast_level=data.get("roast_level"),
         tasting_notes=data.get("tasting_notes"),
@@ -282,7 +280,6 @@ def update_coffee(coffee_id):
         name=data.get("name"),
         country_grown=data.get("country_grown"),
         country_roasted=data.get("country_roasted"),
-        origin=data.get("origin"),
         process=data.get("process"),
         roast_level=data.get("roast_level"),
         tasting_notes=data.get("tasting_notes"),

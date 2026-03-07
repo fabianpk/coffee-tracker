@@ -289,9 +289,11 @@
 
     <div id="review-form" class="card">
         <h2>Review Details</h2>
+        <div id="dedup-banner" style="display:none;background:#8B5E3C;color:white;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px">
+            A coffee with this name already exists.
+        </div>
         <div class="field"><label>Roaster</label><input id="f-roaster"></div>
         <div class="field"><label>Coffee Name</label><input id="f-name"></div>
-        <div class="field"><label>Origin</label><input id="f-origin"></div>
         <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
         <div class="field"><label>Process</label><input id="f-process"></div>
@@ -301,9 +303,14 @@
         <div class="field"><label>Price</label><input id="f-price"></div>
         <div class="field"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
         <div class="field"><label>Your Notes</label><textarea id="f-notes" placeholder="How was it?"></textarea></div>
-        <div class="actions">
+        <div class="actions" id="normal-actions">
             <button class="btn-cancel" id="cancel-btn">Cancel</button>
             <button class="btn-save" id="save-btn">Save</button>
+        </div>
+        <div class="actions" id="dedup-actions" style="display:none">
+            <button class="btn-cancel" id="dedup-cancel-btn">Cancel</button>
+            <button class="btn-save" id="update-existing-btn" style="background:#8B5E3C">Update Existing</button>
+            <button class="btn-save" id="save-as-new-btn">Save as New</button>
         </div>
     </div>
 
@@ -315,7 +322,6 @@
         </div>
         <div class="field"><label>Roaster</label><input id="d-roaster"></div>
         <div class="field"><label>Coffee Name</label><input id="d-name"></div>
-        <div class="field"><label>Origin</label><input id="d-origin"></div>
         <div class="field"><label>Country Grown</label><input id="d-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="d-country_roasted"></div>
         <div class="field"><label>Process</label><input id="d-process"></div>
@@ -411,24 +417,46 @@
             }
         });
 
+        let dupMatchId = null;
+        let dupMatchRoaster = null;
+        let dupMatchName = null;
+
         function fillForm(data) {
-            for (const key of ["roaster", "name", "origin", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price", "other"]) {
+            for (const key of ["roaster", "name", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price", "other"]) {
                 const el = $("f-" + key);
                 if (el) el.value = data[key] || "";
             }
             $("f-notes").value = "";
+
+            // Check for duplicate
+            const scannedRoaster = (data.roaster || "").trim().toLowerCase();
+            const scannedName = (data.name || "").trim().toLowerCase();
+            const match = coffeeCache.find(c =>
+                (c.roaster || "").trim().toLowerCase() === scannedRoaster &&
+                (c.name || "").trim().toLowerCase() === scannedName &&
+                scannedRoaster && scannedName
+            );
+            if (match) {
+                dupMatchId = match.id;
+                dupMatchRoaster = (match.roaster || "").trim().toLowerCase();
+                dupMatchName = (match.name || "").trim().toLowerCase();
+                $("dedup-banner").style.display = "block";
+                $("normal-actions").style.display = "none";
+                $("dedup-actions").style.display = "flex";
+            } else {
+                dupMatchId = null;
+                $("dedup-banner").style.display = "none";
+                $("normal-actions").style.display = "flex";
+                $("dedup-actions").style.display = "none";
+            }
+
             $("review-form").classList.add("active");
         }
 
-        $("cancel-btn").addEventListener("click", () => {
-            $("review-form").classList.remove("active");
-        });
-
-        $("save-btn").addEventListener("click", async () => {
-            const coffee = {
+        function getFormCoffee() {
+            return {
                 roaster: $("f-roaster").value,
                 name: $("f-name").value,
-                origin: $("f-origin").value,
                 country_grown: $("f-country_grown").value,
                 country_roasted: $("f-country_roasted").value,
                 process: $("f-process").value,
@@ -439,19 +467,61 @@
                 other: $("f-other").value,
                 notes: $("f-notes").value,
             };
+        }
+
+        function closeReviewForm() {
+            $("review-form").classList.remove("active");
+        }
+
+        $("cancel-btn").addEventListener("click", closeReviewForm);
+        $("dedup-cancel-btn").addEventListener("click", closeReviewForm);
+
+        $("save-btn").addEventListener("click", async () => {
             await fetch("/api/coffees", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(getFormCoffee()),
+            });
+            closeReviewForm();
+            loadCoffees();
+        });
+
+        $("update-existing-btn").addEventListener("click", async () => {
+            const coffee = getFormCoffee();
+            coffee.created_at = "";
+            const res = await fetch("/api/coffees/" + dupMatchId, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(coffee),
             });
-            $("review-form").classList.remove("active");
+            if (res.ok) {
+                closeReviewForm();
+                loadCoffees();
+            } else {
+                alert("Update failed");
+            }
+        });
+
+        $("save-as-new-btn").addEventListener("click", async () => {
+            const currentRoaster = $("f-roaster").value.trim().toLowerCase();
+            const currentName = $("f-name").value.trim().toLowerCase();
+            if (currentRoaster === dupMatchRoaster && currentName === dupMatchName) {
+                alert("Please change the name or roaster to make this coffee unique before saving as new.");
+                return;
+            }
+            await fetch("/api/coffees", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(getFormCoffee()),
+            });
+            closeReviewForm();
             loadCoffees();
         });
 
         // ── Detail panel ──────────────────────────────────────────────────────
 
         let detailCoffeeId = null;
-        const DETAIL_TEXT_FIELDS = ["roaster", "name", "origin", "country_grown", "country_roasted",
+        const DETAIL_TEXT_FIELDS = ["roaster", "name", "country_grown", "country_roasted",
                                     "process", "roast_level", "tasting_notes", "weight", "price", "other", "notes"];
 
         function detailSnapshot() {
@@ -567,7 +637,7 @@
                 <div class="coffee-item" data-id="${c.id}">
                     <div class="roastery">${esc(c.roaster || "Unknown roaster")}</div>
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
-                    <div class="origin">${esc(c.origin || "")}</div>
+                    ${c.country_grown ? `<div class="origin">${esc(c.country_grown)}</div>` : ""}
                     ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
                     ${c.price ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.price)}</div>` : ""}
                     <div class="meta">
