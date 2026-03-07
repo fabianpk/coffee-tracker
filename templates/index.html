@@ -289,6 +289,9 @@
 
     <div id="review-form" class="card">
         <h2>Review Details</h2>
+        <div id="qr-banner" style="display:none;background:#2e5c3e;color:#c8e6c9;padding:8px 10px;border-radius:8px;margin-bottom:8px;font-size:13px">
+            Enriched from product page
+        </div>
         <div id="dedup-banner" style="display:none;background:#8B5E3C;color:white;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px">
             A coffee with this name already exists.
         </div>
@@ -427,6 +430,9 @@
                 if (el) el.value = data[key] || "";
             }
             $("f-notes").value = "";
+
+            // Show QR enrichment note
+            $("qr-banner").style.display = data.qr_url ? "block" : "none";
 
             // Check for duplicate
             const scannedRoaster = (data.roaster || "").trim().toLowerCase();

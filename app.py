@@ -16,8 +16,12 @@ load_dotenv()
 
 import anthropic
 from flask import Flask, render_template, request, jsonify
+from html.parser import HTMLParser
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 from PIL import Image
 import pillow_heif
+from pyzbar.pyzbar import decode as decode_qr
 
 from models import CoffeeBean, Tasting
 
@@ -88,17 +92,34 @@ def init_db():
     db.close()
 
 
+def detect_qr_url(img: Image.Image) -> str | None:
+    """Detect QR codes in a PIL Image and return the first valid HTTP(S) URL."""
+    try:
+        results = decode_qr(img)
+    except Exception:
+        return None
+    for result in results:
+        try:
+            text = result.data.decode("utf-8")
+        except (UnicodeDecodeError, AttributeError):
+            continue
+        if text.startswith("http://") or text.startswith("https://"):
+            return text
+    return None
+
+
 MAX_DIMENSION = 1568  # Claude's optimal long-edge size
 MAX_BYTES = 600 * 1024  # 600 KB
 DEBUG_IMAGE_DIR = Path(__file__).parent / "debug_images"
 DEBUG_IMAGE_DIR.mkdir(exist_ok=True)
 
 
-def prepare_image(file_storage) -> tuple[str, str]:
-    """Read uploaded image, downscale if needed, and return as JPEG under 600 KB."""
+def prepare_image(file_storage) -> tuple[str, str, Image.Image]:
+    """Read uploaded image, downscale if needed, and return (base64, media_type, full_res_image)."""
     raw = file_storage.read()
     img = Image.open(io.BytesIO(raw))
     img = img.convert("RGB")
+    full_res = img.copy()
 
     if max(img.size) > MAX_DIMENSION:
         img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
@@ -115,7 +136,45 @@ def prepare_image(file_storage) -> tuple[str, str]:
     debug_path.write_bytes(buf.getvalue())
     app.logger.info(f"Debug image saved: {debug_path}")
 
-    return base64.standard_b64encode(buf.getvalue()).decode("utf-8"), "image/jpeg"
+    return base64.standard_b64encode(buf.getvalue()).decode("utf-8"), "image/jpeg", full_res
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """Simple HTML-to-text converter."""
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+        self._skip = False
+
+    def handle_starttag(self, tag, attrs):
+        self._skip = tag in ("script", "style", "noscript")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript"):
+            self._skip = False
+
+    def handle_data(self, data):
+        if not self._skip:
+            self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join(self._parts)
+
+
+def fetch_page_text(url: str) -> str | None:
+    """Fetch a URL and return stripped text content, or None on failure."""
+    try:
+        req = Request(url, headers={"User-Agent": "CoffeeTracker/1.0"})
+        with urlopen(req, timeout=5) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        extractor = _HTMLTextExtractor()
+        extractor.feed(html)
+        text = extractor.get_text().strip()
+        # Truncate to ~8000 chars to keep Claude prompt reasonable
+        return text[:8000] if text else None
+    except Exception as e:
+        app.logger.warning(f"Failed to fetch QR URL {url}: {e}")
+        return None
 
 
 def extract_coffee_details(image_data: str, media_type: str) -> dict:
@@ -163,6 +222,48 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
     return json.loads(text.strip())
 
 
+def extract_coffee_from_text(page_text: str) -> dict:
+    """Send product page text to Claude and extract coffee details as structured data."""
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "This is the text content of a coffee product page. Extract coffee details from it. "
+                    "Text is often in Swedish — transcribe names and tasting notes exactly as written, do not translate. "
+                    "Respond with ONLY valid JSON, no markdown:\n"
+                    '{"roastery": "...", "name": "...", "country_grown": "...", '
+                    '"country_roasted": "...", "process": "...", "roast_level": "...", '
+                    '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
+                    "country_grown is the country or region where the beans were grown; list all separated by commas if multiple. "
+                    "country_roasted is the country where the beans were roasted. "
+                    "For tasting_notes, copy the exact words from the page. "
+                    "Use null for fields you can't find. Be concise.\n\n"
+                    f"Page text:\n{page_text}"
+                ),
+            }
+        ],
+    )
+    text = message.content[0].text
+    if "```" in text:
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    return json.loads(text.strip())
+
+
+def merge_scan_results(image_data: dict, qr_data: dict) -> dict:
+    """Merge image scan and QR/URL scan results. QR data takes priority for non-null fields."""
+    merged = dict(image_data)
+    for key, value in qr_data.items():
+        if value is not None and value != "":
+            merged[key] = value
+    return merged
+
+
 def match_roaster(scanned_name: str, db) -> str | None:
     """Match a scanned roastery name against known roasters in the database."""
     if not scanned_name:
@@ -202,9 +303,25 @@ def scan():
     app.logger.info(f"Received file: {f.filename}, content_type: {f.content_type}")
 
     try:
-        image_data, media_type = prepare_image(f)
+        image_data, media_type, full_res_img = prepare_image(f)
         app.logger.info(f"Prepared image, media_type: {media_type}, data length: {len(image_data)}")
+
+        # Detect QR code from full-resolution image
+        qr_url = detect_qr_url(full_res_img)
+        if qr_url:
+            app.logger.info(f"QR code detected: {qr_url}")
+
+        # Image-based extraction
         details = extract_coffee_details(image_data, media_type)
+
+        # QR/URL-based extraction and merge
+        if qr_url:
+            page_text = fetch_page_text(qr_url)
+            if page_text:
+                app.logger.info(f"Fetched page text ({len(page_text)} chars)")
+                qr_details = extract_coffee_from_text(page_text)
+                details = merge_scan_results(details, qr_details)
+
         # Match scanned roastery against known roasters
         matched_roaster = None
         scanned_roastery = details.get("roastery") or details.get("roaster")
@@ -217,6 +334,7 @@ def scan():
         coffee = CoffeeBean.from_scan(details)
         result = coffee.to_dict()
         result["matched_roaster"] = matched_roaster
+        result["qr_url"] = qr_url
         return jsonify(result)
     except Exception as e:
         app.logger.error(f"Scan error: {e}")

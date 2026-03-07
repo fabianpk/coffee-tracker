@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Duplicate detection after scan
 After a scan populates the review form, the frontend SHALL check the cached coffee list for an existing coffee with the same `roaster` and `name` (case-insensitive, trimmed). If a match is found, the review form SHALL display an info banner (e.g. "A coffee with this name already exists") and change the save options. If a `qr_url` was detected, the banner MAY also mention that data was enriched from the product page.
 
@@ -12,21 +14,3 @@ After a scan populates the review form, the frontend SHALL check the cached coff
 #### Scenario: Scan with QR enrichment shows source info
 - **WHEN** a scan returns data with a non-null `qr_url`
 - **THEN** the review form SHALL display a note indicating data was enriched from the product page URL
-
-### Requirement: Update existing coffee from scan
-When the user clicks "Update Existing" on a duplicate match, the system SHALL send a `PUT /api/coffees/<id>` request with the form data to update the matched coffee entry.
-
-#### Scenario: Update existing coffee
-- **WHEN** the user clicks "Update Existing" after a duplicate is detected
-- **THEN** the matched coffee SHALL be updated via PUT and the coffee list SHALL reload
-
-### Requirement: Save as new requires uniqueness
-When the user clicks "Save as New" on a duplicate match, the system SHALL verify that either the `roaster` or `name` field has been changed from the matched coffee's values before saving. If both are unchanged, the save SHALL be blocked with an alert.
-
-#### Scenario: Save as new with changed name
-- **WHEN** the user changes the name field and clicks "Save as New"
-- **THEN** the coffee SHALL be saved as a new entry
-
-#### Scenario: Save as new without changes blocked
-- **WHEN** the user clicks "Save as New" without changing roaster or name
-- **THEN** an alert SHALL inform the user to change the name or roaster first and the save SHALL NOT proceed
