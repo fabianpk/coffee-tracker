@@ -3,6 +3,7 @@
 
 import io
 import json
+import os
 import sys
 import base64
 import mimetypes
@@ -35,7 +36,7 @@ def load_image(image_path: str) -> tuple[str, str]:
 def scan_coffee(image_path: str) -> CoffeeBean:
     image_data, media_type = load_image(image_path)
 
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,

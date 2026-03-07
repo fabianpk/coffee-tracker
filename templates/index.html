@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coffee Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -138,6 +139,70 @@
 
         #scan-form, #review-form { display: none; }
         #scan-form.active, #review-form.active { display: block; }
+
+        .other-md {
+            margin-top: 8px;
+            padding: 8px;
+            background: #222;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #bbb;
+            line-height: 1.5;
+        }
+        .other-md p { margin: 0 0 4px; }
+        .other-md ul, .other-md ol { margin: 0 0 4px 16px; }
+        .other-md strong { color: #ddd; }
+
+        .coffee-item { cursor: pointer; }
+        .coffee-item:active { opacity: 0.8; }
+
+        /* Detail panel overlay */
+        #detail-panel {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #1a1a1a;
+            z-index: 100;
+            overflow-y: auto;
+            padding: 16px;
+            padding-bottom: 100px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        #detail-panel.active { display: block; animation: slide-up 0.2s ease; }
+        @keyframes slide-up {
+            from { transform: translateY(30px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+        .detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .detail-header h2 { margin: 0; }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+        }
+        .btn-rescan {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            background: #333;
+            color: #e0e0e0;
+            border: 2px dashed #555;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .btn-rescan:disabled { opacity: 0.5; cursor: wait; }
     </style>
 </head>
 <body>
@@ -182,11 +247,55 @@
                 <button data-val="5">5</button>
             </div>
         </div>
+        <div class="field"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
         <div class="field"><label>Your Notes</label><textarea id="f-notes" placeholder="How was it?"></textarea></div>
         <div class="actions">
             <button class="btn-cancel" id="cancel-btn">Cancel</button>
             <button class="btn-save" id="save-btn">Save</button>
         </div>
+    </div>
+
+    <!-- Detail / Edit panel -->
+    <div id="detail-panel">
+        <div class="detail-header">
+            <h2>Edit Coffee</h2>
+            <button class="close-btn" id="detail-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="field"><label>Roaster</label><input id="d-roaster"></div>
+        <div class="field"><label>Coffee Name</label><input id="d-name"></div>
+        <div class="field"><label>Origin</label><input id="d-origin"></div>
+        <div class="field"><label>Country Grown</label><input id="d-country_grown"></div>
+        <div class="field"><label>Country Roasted</label><input id="d-country_roasted"></div>
+        <div class="field"><label>Process</label><input id="d-process"></div>
+        <div class="field"><label>Roast Level</label><input id="d-roast_level"></div>
+        <div class="field"><label>Tasting Notes</label><input id="d-tasting_notes"></div>
+        <div class="field"><label>Weight</label><input id="d-weight"></div>
+        <div class="field"><label>Price</label><input id="d-price"></div>
+        <div class="field">
+            <label>Brew Score</label>
+            <div class="rating" id="d-brew-score-buttons">
+                <button data-val="1">1</button><button data-val="2">2</button>
+                <button data-val="3">3</button><button data-val="4">4</button>
+                <button data-val="5">5</button>
+            </div>
+        </div>
+        <div class="field">
+            <label>Espresso Score</label>
+            <div class="rating" id="d-espresso-score-buttons">
+                <button data-val="1">1</button><button data-val="2">2</button>
+                <button data-val="3">3</button><button data-val="4">4</button>
+                <button data-val="5">5</button>
+            </div>
+        </div>
+        <div class="field"><label>Other (markdown)</label><textarea id="d-other" style="min-height:80px"></textarea></div>
+        <div class="field"><label>Your Notes</label><textarea id="d-notes" placeholder="How was it?"></textarea></div>
+        <div class="actions">
+            <button class="btn-rescan" id="detail-rescan-btn">Scan another side</button>
+        </div>
+        <div class="actions" style="margin-top:8px">
+            <button class="btn-save" id="detail-save-btn">Save</button>
+        </div>
+        <input type="file" id="rescan-input" accept="image/*" style="display:none">
     </div>
 
     <h2>My Coffees</h2>
@@ -197,7 +306,7 @@
         let selectedBrewScore = null;
         let selectedEspressoScore = null;
 
-        // Camera trigger handled by <label for="camera-input">
+        // ── Initial scan ──────────────────────────────────────────────────────
 
         $("camera-input").addEventListener("change", async (e) => {
             const file = e.target.files[0];
@@ -228,7 +337,7 @@
         });
 
         function fillForm(data) {
-            for (const key of ["roaster", "name", "origin", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price"]) {
+            for (const key of ["roaster", "name", "origin", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price", "other"]) {
                 const el = $("f-" + key);
                 if (el) el.value = data[key] || "";
             }
@@ -240,7 +349,6 @@
             $("review-form").classList.add("active");
         }
 
-        // Score buttons
         function setupScoreButtons(containerId, setScore) {
             $(containerId).addEventListener("click", (e) => {
                 if (e.target.dataset.val) {
@@ -255,12 +363,10 @@
         setupScoreButtons("brew-score-buttons", v => selectedBrewScore = v);
         setupScoreButtons("espresso-score-buttons", v => selectedEspressoScore = v);
 
-        // Cancel
         $("cancel-btn").addEventListener("click", () => {
             $("review-form").classList.remove("active");
         });
 
-        // Save
         $("save-btn").addEventListener("click", async () => {
             const coffee = {
                 roaster: $("f-roaster").value,
@@ -275,20 +381,149 @@
                 price: $("f-price").value,
                 brew_score: selectedBrewScore,
                 espresso_score: selectedEspressoScore,
+                other: $("f-other").value,
                 notes: $("f-notes").value,
             };
-
             await fetch("/api/coffees", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(coffee),
             });
-
             $("review-form").classList.remove("active");
             loadCoffees();
         });
 
-        // Delete
+        // ── Detail panel ──────────────────────────────────────────────────────
+
+        let detailCoffeeId = null;
+        let detailBrewScore = null;
+        let detailEspressoScore = null;
+        const DETAIL_TEXT_FIELDS = ["roaster", "name", "origin", "country_grown", "country_roasted",
+                                    "process", "roast_level", "tasting_notes", "weight", "price", "other", "notes"];
+
+        function detailSnapshot() {
+            const snap = {};
+            for (const key of DETAIL_TEXT_FIELDS) snap[key] = $("d-" + key).value;
+            snap.brew_score = detailBrewScore;
+            snap.espresso_score = detailEspressoScore;
+            return JSON.stringify(snap);
+        }
+
+        let detailOriginalSnapshot = null;
+
+        function openDetail(coffee) {
+            detailCoffeeId = coffee.id;
+            for (const key of DETAIL_TEXT_FIELDS) {
+                $("d-" + key).value = coffee[key] || "";
+            }
+            // Set score buttons
+            detailBrewScore = coffee.brew_score || null;
+            detailEspressoScore = coffee.espresso_score || null;
+            setDetailScore("d-brew-score-buttons", detailBrewScore, v => detailBrewScore = v);
+            setDetailScore("d-espresso-score-buttons", detailEspressoScore, v => detailEspressoScore = v);
+
+            detailOriginalSnapshot = detailSnapshot();
+            $("detail-panel").classList.add("active");
+            $("detail-panel").scrollTop = 0;
+        }
+
+        function setDetailScore(containerId, currentVal, setter) {
+            const container = $(containerId);
+            container.querySelectorAll("button").forEach(b => {
+                b.classList.toggle("active", currentVal && parseInt(b.dataset.val) <= currentVal);
+            });
+            // re-wire click (remove old listener by replacing node)
+            const fresh = container.cloneNode(true);
+            container.parentNode.replaceChild(fresh, container);
+            fresh.addEventListener("click", (e) => {
+                if (e.target.dataset.val) {
+                    const val = parseInt(e.target.dataset.val);
+                    setter(val);
+                    fresh.querySelectorAll("button").forEach(b =>
+                        b.classList.toggle("active", parseInt(b.dataset.val) <= val)
+                    );
+                }
+            });
+        }
+
+        function closeDetail() {
+            if (detailSnapshot() !== detailOriginalSnapshot) {
+                if (!confirm("Discard unsaved changes?")) return;
+            }
+            $("detail-panel").classList.remove("active");
+            detailCoffeeId = null;
+        }
+
+        $("detail-close-btn").addEventListener("click", closeDetail);
+
+        $("detail-save-btn").addEventListener("click", async () => {
+            const coffee = { created_at: "" };
+            for (const key of DETAIL_TEXT_FIELDS) coffee[key] = $("d-" + key).value;
+            coffee.brew_score = detailBrewScore;
+            coffee.espresso_score = detailEspressoScore;
+
+            const res = await fetch("/api/coffees/" + detailCoffeeId, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(coffee),
+            });
+            if (res.ok) {
+                $("detail-panel").classList.remove("active");
+                detailCoffeeId = null;
+                loadCoffees();
+            } else {
+                alert("Save failed");
+            }
+        });
+
+        // ── Rescan ────────────────────────────────────────────────────────────
+
+        $("detail-rescan-btn").addEventListener("click", () => {
+            $("rescan-input").value = "";
+            $("rescan-input").click();
+        });
+
+        $("rescan-input").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const btn = $("detail-rescan-btn");
+            btn.disabled = true;
+            btn.textContent = "Scanning…";
+
+            const form = new FormData();
+            form.append("image", file);
+
+            try {
+                const res = await fetch("/api/scan", { method: "POST", body: form });
+                const data = await res.json();
+                if (!res.ok) { alert("Scan failed: " + (data.error || "Unknown error")); return; }
+
+                // Merge: fill only empty fields
+                for (const key of DETAIL_TEXT_FIELDS) {
+                    if (data[key] && !$("d-" + key).value) {
+                        $("d-" + key).value = data[key];
+                    }
+                }
+                if (data.brew_score && !detailBrewScore) {
+                    detailBrewScore = data.brew_score;
+                    setDetailScore("d-brew-score-buttons", detailBrewScore, v => detailBrewScore = v);
+                }
+                if (data.espresso_score && !detailEspressoScore) {
+                    detailEspressoScore = data.espresso_score;
+                    setDetailScore("d-espresso-score-buttons", detailEspressoScore, v => detailEspressoScore = v);
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Scan another side";
+                $("rescan-input").value = "";
+            }
+        });
+
+        // ── List ──────────────────────────────────────────────────────────────
+
         async function deleteCoffee(id) {
             if (!confirm("Delete this coffee?")) return;
             await fetch("/api/coffees/" + id, { method: "DELETE" });
@@ -302,19 +537,20 @@
             return parts.length ? `<span class="rating-display">${parts.join(" &middot; ")}</span>` : "";
         }
 
-        // Load list
+        let coffeeCache = [];
+
         async function loadCoffees() {
             const res = await fetch("/api/coffees");
-            const coffees = await res.json();
+            coffeeCache = await res.json();
             const list = $("coffee-list");
 
-            if (coffees.length === 0) {
+            if (coffeeCache.length === 0) {
                 list.innerHTML = '<p class="empty">No coffees yet. Scan your first bag!</p>';
                 return;
             }
 
-            list.innerHTML = coffees.map(c => `
-                <div class="coffee-item">
+            list.innerHTML = coffeeCache.map(c => `
+                <div class="coffee-item" data-id="${c.id}">
                     <div class="roastery">${esc(c.roaster || "Unknown roaster")}</div>
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
                     <div class="origin">${esc(c.origin || "")}</div>
@@ -323,11 +559,19 @@
                     <div class="meta">
                         <span>${renderScores(c)}</span>
                         <span>${new Date(c.created_at).toLocaleDateString()}</span>
-                        <button class="delete-btn" onclick="deleteCoffee(${c.id})">delete</button>
+                        <button class="delete-btn" onclick="event.stopPropagation(); deleteCoffee(${c.id})">delete</button>
                     </div>
                     ${c.notes ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.notes)}"</div>` : ""}
+                    ${c.other ? `<div class="other-md">${marked.parse(c.other)}</div>` : ""}
                 </div>
             `).join("");
+
+            list.querySelectorAll(".coffee-item").forEach(el => {
+                el.addEventListener("click", () => {
+                    const coffee = coffeeCache.find(c => c.id === parseInt(el.dataset.id));
+                    if (coffee) openDetail(coffee);
+                });
+            });
         }
 
         function esc(s) {

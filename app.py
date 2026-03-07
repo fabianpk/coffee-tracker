@@ -76,23 +76,39 @@ def init_db():
     db.close()
 
 
+MAX_DIMENSION = 1568  # Claude's optimal long-edge size
+MAX_BYTES = 600 * 1024  # 600 KB
+DEBUG_IMAGE_DIR = Path(__file__).parent / "debug_images"
+DEBUG_IMAGE_DIR.mkdir(exist_ok=True)
+
+
 def prepare_image(file_storage) -> tuple[str, str]:
-    """Read uploaded image and convert to supported format if needed."""
+    """Read uploaded image, downscale if needed, and return as JPEG under 600 KB."""
     raw = file_storage.read()
-    media_type = file_storage.content_type or mimetypes.guess_type(file_storage.filename)[0]
-
-    if media_type in SUPPORTED_TYPES:
-        return base64.standard_b64encode(raw).decode("utf-8"), media_type
-
     img = Image.open(io.BytesIO(raw))
-    buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="JPEG", quality=85)
+    img = img.convert("RGB")
+
+    if max(img.size) > MAX_DIMENSION:
+        img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+
+    for quality in (85, 75, 60, 50):
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        if buf.tell() <= MAX_BYTES:
+            break
+
+    # Save for debugging
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    debug_path = DEBUG_IMAGE_DIR / f"{ts}_{quality}q_{buf.tell()//1024}kb.jpg"
+    debug_path.write_bytes(buf.getvalue())
+    app.logger.info(f"Debug image saved: {debug_path}")
+
     return base64.standard_b64encode(buf.getvalue()).decode("utf-8"), "image/jpeg"
 
 
 def extract_coffee_details(image_data: str, media_type: str) -> dict:
     """Send image to Claude and extract coffee details as structured data."""
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
@@ -111,13 +127,15 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                     {
                         "type": "text",
                         "text": (
-                            "This is a photo of a coffee bag. Extract details and respond with ONLY valid JSON, no markdown:\n"
+                            "This is a photo of a coffee bag. Labels are often in Swedish — read all text carefully and transcribe it exactly as printed, do not translate or guess. "
+                            "Respond with ONLY valid JSON, no markdown:\n"
                             '{"roastery": "...", "name": "...", "origin": "...", "country_grown": "...", '
                             '"country_roasted": "...", "process": "...", "roast_level": "...", '
                             '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
                             "For origin, list all countries/regions separated by commas if multiple (e.g. a blend). "
                             "country_grown is the country where the beans were grown. "
                             "country_roasted is the country where the beans were roasted. "
+                            "For tasting_notes, copy the exact words from the bag (e.g. 'Björnbär / Röd Grapefrukt / Tranbär'). "
                             "Use null for fields you can't find. Be concise."
                         ),
                     },
@@ -193,6 +211,47 @@ def save_coffee():
     db.commit()
     db.close()
     return jsonify({"status": "saved"}), 201
+
+
+@app.route("/api/coffees/<int:coffee_id>", methods=["GET"])
+def get_coffee(coffee_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM coffees WHERE id = ?", (coffee_id,)).fetchone()
+    db.close()
+    if row is None:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(CoffeeBean.from_row(row).to_dict())
+
+
+@app.route("/api/coffees/<int:coffee_id>", methods=["PUT"])
+def update_coffee(coffee_id):
+    data = request.json
+    coffee = CoffeeBean(
+        id=coffee_id,
+        roaster=data.get("roaster"),
+        name=data.get("name"),
+        country_grown=data.get("country_grown"),
+        country_roasted=data.get("country_roasted"),
+        origin=data.get("origin"),
+        process=data.get("process"),
+        roast_level=data.get("roast_level"),
+        tasting_notes=data.get("tasting_notes"),
+        weight=data.get("weight"),
+        price=data.get("price"),
+        brew_score=data.get("brew_score"),
+        espresso_score=data.get("espresso_score"),
+        other=data.get("other"),
+        notes=data.get("notes"),
+        created_at=data.get("created_at", ""),
+    )
+    row = coffee.to_row()
+    assignments = ", ".join(f"{k} = ?" for k in row)
+    db = get_db()
+    db.execute(f"UPDATE coffees SET {assignments} WHERE id = ?", [*row.values(), coffee_id])
+    db.commit()
+    updated = db.execute("SELECT * FROM coffees WHERE id = ?", (coffee_id,)).fetchone()
+    db.close()
+    return jsonify(CoffeeBean.from_row(updated).to_dict())
 
 
 @app.route("/api/coffees/<int:coffee_id>", methods=["DELETE"])

@@ -12,7 +12,7 @@ A web app for scanning coffee bag photos with Claude's vision API and tracking t
 
 ```bash
 uv sync
-echo "ANTHROPIC_API_KEY=your-key-here" > .env
+echo "ANTHROPIC_API_KEY_FOR_LOOKUP=your-key-here" > .env
 ```
 
 ## Usage

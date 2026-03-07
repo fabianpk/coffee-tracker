@@ -29,7 +29,7 @@ No test suite exists yet.
 ## Key Details
 
 - Python 3.13, managed with **uv** (not pip)
-- `ANTHROPIC_API_KEY` must be set in `.env` (loaded via python-dotenv)
+- `ANTHROPIC_API_KEY_FOR_LOOKUP` must be set in `.env` (loaded via python-dotenv). Uses a distinct name to avoid colliding with the `ANTHROPIC_API_KEY` that Claude Code itself uses.
 - HEIC/HEIF image support via `pillow-heif`; unsupported formats are auto-converted to JPEG before sending to the API
 - The SQLite DB file (`coffees.db`) is gitignored and auto-created on startup via `init_db()`
 - `init_db()` automatically migrates old schemas: adds missing columns and copies `rating` → `brew_score` for backward compatibility
