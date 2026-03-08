@@ -350,10 +350,12 @@ def scan():
             db.close()
             if matched_roaster:
                 details["roastery"] = matched_roaster
+        scan_other = details.get("other")
         coffee = CoffeeBean.from_scan(details)
         result = coffee.to_dict()
         result["matched_roaster"] = matched_roaster
         result["qr_url"] = qr_url
+        result["other"] = scan_other
         return jsonify(result)
     except Exception as e:
         app.logger.error(f"Scan error: {e}")
