@@ -48,6 +48,7 @@ def init_db():
             name TEXT,
             country_grown TEXT,
             country_roasted TEXT,
+            bean_type TEXT,
             origin TEXT,
             process TEXT,
             roast_level TEXT,
@@ -78,6 +79,7 @@ def init_db():
         "roaster": "TEXT",
         "country_grown": "TEXT",
         "country_roasted": "TEXT",
+        "bean_type": "TEXT",
         "price": "TEXT",
         "brew_score": "INTEGER",
         "espresso_score": "INTEGER",
@@ -201,10 +203,11 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                             "This is a photo of a coffee bag. Labels are often in Swedish — read all text carefully and transcribe it exactly as printed, do not translate or guess. "
                             "Respond with ONLY valid JSON, no markdown:\n"
                             '{"roastery": "...", "name": "...", "country_grown": "...", '
-                            '"country_roasted": "...", "process": "...", "roast_level": "...", '
+                            '"country_roasted": "...", "bean_type": "...", "process": "...", "roast_level": "...", '
                             '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
                             "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend). "
                             "country_roasted is the country where the beans were roasted. "
+                            "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated on the bag. "
                             "For tasting_notes, copy the exact words from the bag (e.g. 'Björnbär / Röd Grapefrukt / Tranbär'). "
                             "Use null for fields you can't find. Be concise."
                         ),
@@ -236,10 +239,11 @@ def extract_coffee_from_text(page_text: str) -> dict:
                     "Text is often in Swedish — transcribe names and tasting notes exactly as written, do not translate. "
                     "Respond with ONLY valid JSON, no markdown:\n"
                     '{"roastery": "...", "name": "...", "country_grown": "...", '
-                    '"country_roasted": "...", "process": "...", "roast_level": "...", '
+                    '"country_roasted": "...", "bean_type": "...", "process": "...", "roast_level": "...", '
                     '"tasting_notes": "...", "weight": "...", "price": "...", "other": "..."}\n'
                     "country_grown is the country or region where the beans were grown; list all separated by commas if multiple. "
                     "country_roasted is the country where the beans were roasted. "
+                    "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated. "
                     "For tasting_notes, copy the exact words from the page. "
                     "Use null for fields you can't find. Be concise.\n\n"
                     f"Page text:\n{page_text}"
@@ -361,6 +365,7 @@ def save_coffee():
         name=data.get("name"),
         country_grown=data.get("country_grown"),
         country_roasted=data.get("country_roasted"),
+        bean_type=data.get("bean_type"),
         process=data.get("process"),
         roast_level=data.get("roast_level"),
         tasting_notes=data.get("tasting_notes"),
@@ -398,6 +403,7 @@ def update_coffee(coffee_id):
         name=data.get("name"),
         country_grown=data.get("country_grown"),
         country_roasted=data.get("country_roasted"),
+        bean_type=data.get("bean_type"),
         process=data.get("process"),
         roast_level=data.get("roast_level"),
         tasting_notes=data.get("tasting_notes"),

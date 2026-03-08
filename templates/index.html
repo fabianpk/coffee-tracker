@@ -299,6 +299,7 @@
         <div class="field"><label>Coffee Name</label><input id="f-name"></div>
         <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
+        <div class="field"><label>Bean Type</label><input id="f-bean_type" placeholder="e.g. Arabica, Bourbon, Robusta"></div>
         <div class="field"><label>Process</label><input id="f-process"></div>
         <div class="field"><label>Roast Level</label><input id="f-roast_level"></div>
         <div class="field"><label>Tasting Notes</label><input id="f-tasting_notes"></div>
@@ -327,6 +328,7 @@
         <div class="field"><label>Coffee Name</label><input id="d-name"></div>
         <div class="field"><label>Country Grown</label><input id="d-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="d-country_roasted"></div>
+        <div class="field"><label>Bean Type</label><input id="d-bean_type" placeholder="e.g. Arabica, Bourbon, Robusta"></div>
         <div class="field"><label>Process</label><input id="d-process"></div>
         <div class="field"><label>Roast Level</label><input id="d-roast_level"></div>
         <div class="field"><label>Tasting Notes</label><input id="d-tasting_notes"></div>
@@ -425,7 +427,7 @@
         let dupMatchName = null;
 
         function fillForm(data) {
-            for (const key of ["roaster", "name", "country_grown", "country_roasted", "process", "roast_level", "tasting_notes", "weight", "price", "other"]) {
+            for (const key of ["roaster", "name", "country_grown", "country_roasted", "bean_type", "process", "roast_level", "tasting_notes", "weight", "price", "other"]) {
                 const el = $("f-" + key);
                 if (el) el.value = data[key] || "";
             }
@@ -465,6 +467,7 @@
                 name: $("f-name").value,
                 country_grown: $("f-country_grown").value,
                 country_roasted: $("f-country_roasted").value,
+                bean_type: $("f-bean_type").value,
                 process: $("f-process").value,
                 roast_level: $("f-roast_level").value,
                 tasting_notes: $("f-tasting_notes").value,
@@ -528,7 +531,7 @@
 
         let detailCoffeeId = null;
         const DETAIL_TEXT_FIELDS = ["roaster", "name", "country_grown", "country_roasted",
-                                    "process", "roast_level", "tasting_notes", "weight", "price", "other", "notes"];
+                                    "bean_type", "process", "roast_level", "tasting_notes", "weight", "price", "other", "notes"];
 
         function detailSnapshot() {
             const snap = {};
@@ -644,6 +647,7 @@
                     <div class="roastery">${esc(c.roaster || "Unknown roaster")}</div>
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
                     ${c.country_grown ? `<div class="origin">${esc(c.country_grown)}</div>` : ""}
+                    ${c.bean_type ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.bean_type)}</div>` : ""}
                     ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
                     ${c.price ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.price)}</div>` : ""}
                     <div class="meta">

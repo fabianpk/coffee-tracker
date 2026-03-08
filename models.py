@@ -11,6 +11,7 @@ class CoffeeBean:
     name: str | None = None
     country_grown: str | None = None
     country_roasted: str | None = None
+    bean_type: str | None = None
     process: str | None = None
     roast_level: str | None = None
     tasting_notes: str | None = None
