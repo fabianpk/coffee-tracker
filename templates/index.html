@@ -342,6 +342,9 @@
         <div class="actions" style="margin-top:8px">
             <button class="btn-save" id="detail-save-btn">Save</button>
         </div>
+        <div class="actions" style="margin-top:16px">
+            <button id="detail-delete-btn" style="width:100%;padding:12px;font-size:15px;font-weight:600;background:#444;color:#e57373;border:1px solid #e57373;border-radius:10px;cursor:pointer">Delete Coffee</button>
+        </div>
         <input type="file" id="rescan-input" accept="image/*" style="display:none">
     </div>
 
@@ -577,6 +580,14 @@
             } else {
                 alert("Save failed");
             }
+        });
+
+        $("detail-delete-btn").addEventListener("click", async () => {
+            if (!confirm("Delete this coffee and all its tastings?")) return;
+            await fetch("/api/coffees/" + detailCoffeeId, { method: "DELETE" });
+            $("detail-panel").classList.remove("active");
+            detailCoffeeId = null;
+            loadCoffees();
         });
 
         // ── Rescan ────────────────────────────────────────────────────────────
