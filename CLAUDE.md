@@ -21,10 +21,14 @@ No test suite exists yet.
 - **`app.py`** — Flask web app. Contains all routes, database setup, and image processing. Uses Claude Haiku 4.5 vision to extract structured JSON from coffee bag photos. SQLite database (`coffees.db`) stores entries. Key routes:
   - `POST /api/scan` — accepts image upload, returns extracted coffee details as JSON
   - `GET/POST /api/coffees` — list and save coffee entries
-  - `DELETE /api/coffees/<id>` — delete an entry
-- **`models.py`** — `CoffeeBean` dataclass representing a coffee entry with properties: roaster, name, country_grown, country_roasted, origin, process, roast_level, tasting_notes, weight, price, brew_score, espresso_score, other, notes. Provides `to_row()`, `from_row()`, `to_dict()`, and `from_scan()` methods for serialization.
+  - `PUT /api/coffees/<id>` — update an entry
+  - `DELETE /api/coffees/<id>` — delete an entry (cascade deletes tastings)
+  - `POST /api/tastings` — save a tasting
+  - `DELETE /api/tastings/<id>` — delete a tasting
+- **`models.py`** — `CoffeeBean` dataclass representing a coffee entry with properties: roaster, name, country_grown, country_roasted, bean_type, process, roast_level, tasting_notes, weight, price, other, notes. `Tasting` dataclass for brew tastings with brew_type, dosage, score, notes. Both provide `to_row()`, `from_row()`, `to_dict()` methods for serialization. `CoffeeBean` also has `from_scan()` for mapping Claude scan output.
 - **`scan_coffee.py`** — Standalone CLI tool that does the same vision extraction, returns structured `CoffeeBean` output. Takes an image path as argument.
-- **`templates/index.html`** — Single-page frontend with inline CSS/JS (no build step). Dark theme, mobile-first. Handles camera input, review form, and coffee list display.
+- **`scan_hints.example.md`** — Example template for scan hints. Users copy to `scan_hints.md` (gitignored) to provide domain knowledge (common processes, bean varieties, origins) that gets appended to the Claude scan prompt.
+- **`templates/index.html`** — Single-page frontend with inline CSS/JS (no build step). Dark theme, mobile-first. Handles camera input, review form, coffee list, detail/edit panel, and tasting workflow.
 
 ## Key Details
 
