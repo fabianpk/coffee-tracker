@@ -107,7 +107,38 @@
         .coffee-item .roastery { font-size: 12px; color: #999; text-transform: uppercase; }
         .coffee-item .name { font-size: 18px; font-weight: 600; margin: 2px 0; }
         .coffee-item .origin { color: #aaa; font-size: 14px; }
-        .coffee-item .notes-line { color: #8B5E3C; font-size: 14px; margin-top: 4px; }
+        .tasting-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+        .tasting-tag {
+            display: inline-block;
+            background: #3a2a1a;
+            color: #d4a574;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 1px solid #5a3a1a;
+        }
+        .tasting-tag:hover { background: #4a3a2a; }
+        .filter-bar {
+            background: #3a2a1a;
+            border: 1px solid #5a3a1a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #d4a574;
+            font-size: 14px;
+        }
+        .filter-bar button {
+            background: none;
+            border: none;
+            color: #e57373;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+        }
         .coffee-item .meta {
             display: flex;
             justify-content: space-between;
@@ -260,7 +291,7 @@
             color: #aaa;
         }
         .tasting-entry .te-score { color: #8B5E3C; font-weight: 600; }
-        .tasting-entry .te-notes { color: #999; font-style: italic; margin-top: 2px; }
+        .tasting-entry .te-comments { color: #999; font-style: italic; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -295,7 +326,7 @@
         <div class="field"><label>Weight</label><input id="f-weight"></div>
         <div class="field"><label>Price</label><input id="f-price"></div>
         <div class="field"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
-        <div class="field"><label>Your Notes</label><textarea id="f-notes" placeholder="Other notes"></textarea></div>
+        <div class="field"><label>General Comments</label><textarea id="f-comments" placeholder="General comments"></textarea></div>
         <div class="actions" id="normal-actions">
             <button class="btn-cancel" id="cancel-btn">Cancel</button>
             <button class="btn-save" id="save-btn">Save</button>
@@ -323,7 +354,7 @@
         <div class="field"><label>Tasting Notes</label><input id="d-tasting_notes"></div>
         <div class="field"><label>Weight</label><input id="d-weight"></div>
         <div class="field"><label>Price</label><input id="d-price"></div>
-        <div class="field"><label>Your Notes</label><textarea id="d-notes" placeholder="Other notes"></textarea></div>
+        <div class="field"><label>General Comments</label><textarea id="d-comments" placeholder="General comments"></textarea></div>
         <div class="actions">
             <button class="btn-rescan" id="detail-rescan-btn">Scan another side</button>
         </div>
@@ -369,7 +400,8 @@
                     <button data-val="5">5</button>
                 </div>
             </div>
-            <div class="field"><label>Notes</label><textarea id="t-notes" placeholder="How was it?" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px;font-family:inherit;resize:vertical;min-height:60px"></textarea></div>
+            <div class="field"><label>Tasting Notes</label><input id="t-tasting_notes" placeholder="e.g. Chocolate, Berry, Citrus" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px"></div>
+            <div class="field"><label>General Comments</label><textarea id="t-comments" placeholder="General comments" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px;font-family:inherit;resize:vertical;min-height:60px"></textarea></div>
             <div class="actions">
                 <button class="btn-cancel" id="tasting-cancel-btn">Cancel</button>
                 <button class="btn-save" id="tasting-save-btn">Save Tasting</button>
@@ -378,6 +410,10 @@
     </div>
 
     <h2>My Coffees</h2>
+    <div id="filter-bar" class="filter-bar" style="display:none">
+        <span>Filtering by: <strong id="filter-note-name"></strong></span>
+        <button id="clear-filter-btn" aria-label="Clear filter">&times;</button>
+    </div>
     <div id="coffee-list"><p class="empty">No coffees yet. Scan your first bag!</p></div>
 
     <script>
@@ -423,7 +459,7 @@
                 if (el) el.value = data[key] || "";
             }
             $("f-other").value = data.other || "";
-            $("f-notes").value = "";
+            $("f-comments").value = "";
 
             // Show QR enrichment note
             $("qr-banner").style.display = data.qr_url ? "block" : "none";
@@ -465,7 +501,7 @@
                 tasting_notes: $("f-tasting_notes").value,
                 weight: $("f-weight").value,
                 price: $("f-price").value,
-                notes: $("f-notes").value,
+                comments: $("f-comments").value,
             };
         }
 
@@ -522,7 +558,7 @@
 
         let detailCoffeeId = null;
         const DETAIL_TEXT_FIELDS = ["roaster", "name", "country_grown", "country_roasted",
-                                    "bean_type", "process", "roast_level", "tasting_notes", "weight", "price", "notes"];
+                                    "bean_type", "process", "roast_level", "tasting_notes", "weight", "price", "comments"];
 
         function detailSnapshot() {
             const snap = {};
@@ -630,9 +666,26 @@
         }
 
         let coffeeCache = [];
+        let activeNoteFilter = null;
+
+        function filterByNote(note) {
+            activeNoteFilter = note;
+            $("filter-note-name").textContent = note;
+            $("filter-bar").style.display = "flex";
+            loadCoffees();
+        }
+
+        $("clear-filter-btn").addEventListener("click", () => {
+            activeNoteFilter = null;
+            $("filter-bar").style.display = "none";
+            loadCoffees();
+        });
 
         async function loadCoffees() {
-            const res = await fetch("/api/coffees");
+            const url = activeNoteFilter
+                ? "/api/coffees?note=" + encodeURIComponent(activeNoteFilter)
+                : "/api/coffees";
+            const res = await fetch(url);
             coffeeCache = await res.json();
             const list = $("coffee-list");
 
@@ -647,14 +700,14 @@
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
                     ${c.country_grown ? `<div class="origin">${esc(c.country_grown)}</div>` : ""}
                     ${c.bean_type ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.bean_type)}</div>` : ""}
-                    ${c.tasting_notes ? `<div class="notes-line">${esc(c.tasting_notes)}</div>` : ""}
+                    ${c.tasting_notes ? `<div class="tasting-tags">${c.tasting_notes.split(",").map(n => n.trim()).filter(Boolean).map(n => `<span class="tasting-tag" onclick="event.stopPropagation(); filterByNote('${esc(n)}')">${esc(n)}</span>`).join("")}</div>` : ""}
                     ${c.price ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.price)}</div>` : ""}
                     <div class="meta">
                         <span>${renderAvgScore(c)}</span>
                         <span>${new Date(c.created_at).toLocaleDateString()}</span>
                         <button class="delete-btn" onclick="event.stopPropagation(); deleteCoffee(${c.id})">delete</button>
                     </div>
-                    ${c.notes ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.notes)}"</div>` : ""}
+                    ${c.comments ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.comments)}"</div>` : ""}
                     <button class="tasting-toggle" onclick="event.stopPropagation(); toggleTastingHistory(this, ${c.id})">Show tastings</button>
                     <div class="tasting-history" id="tastings-${c.id}" style="display:none"></div>
                 </div>
@@ -702,7 +755,8 @@
             $("t-brew-type-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("t-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("t-dosage").value = "";
-            $("t-notes").value = "";
+            $("t-tasting_notes").value = "";
+            $("t-comments").value = "";
             $("tasting-modal").classList.add("active");
         });
 
@@ -737,7 +791,8 @@
                 brew_type: selectedBrewType,
                 dosage: dosageVal ? parseFloat(dosageVal) : null,
                 score: selectedTastingScore,
-                notes: $("t-notes").value || null,
+                tasting_notes: $("t-tasting_notes").value || null,
+                comments: $("t-comments").value || null,
             };
             const res = await fetch("/api/tastings", {
                 method: "POST",
@@ -774,7 +829,8 @@
                             <span>${new Date(t.created_at).toLocaleDateString()}</span>
                         </div>
                         ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
-                        ${t.notes ? `<div class="te-notes">"${esc(t.notes)}"</div>` : ""}
+                        ${t.tasting_notes ? `<div class="tasting-tags" style="margin-top:2px">${t.tasting_notes.split(",").map(n => n.trim()).filter(Boolean).map(n => `<span class="tasting-tag" onclick="event.stopPropagation(); filterByNote('${esc(n)}')">${esc(n)}</span>`).join("")}</div>` : ""}
+                        ${t.comments ? `<div class="te-comments">"${esc(t.comments)}"</div>` : ""}
                         <button class="delete-btn" style="margin-top:4px" onclick="deleteTasting(${t.id}, ${coffeeId})">delete</button>
                     </div>
                 `).join("");

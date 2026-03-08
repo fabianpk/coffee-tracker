@@ -14,19 +14,18 @@ The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the follow
 | `tasting_notes` | `str \| None` |
 | `weight` | `str \| None` |
 | `price` | `str \| None` |
-| `other` | `str \| None` |
-| `notes` | `str \| None` |
+| `comments` | `str \| None` |
 | `created_at` | `str` |
 
 `origin` is removed from the dataclass. The `origin` column remains in the database but is ignored by `from_row()`.
 
-#### Scenario: Create a CoffeeBean with all fields including bean_type
-- **WHEN** a `CoffeeBean` is instantiated with `bean_type="Bourbon"` and all other properties set
-- **THEN** `bean_type` SHALL be accessible as a `str | None` attribute with value `"Bourbon"`
+#### Scenario: Create a CoffeeBean with all fields including comments
+- **WHEN** a `CoffeeBean` is instantiated with `comments="Great coffee from a Tokyo cafe"` and all other properties set
+- **THEN** `comments` SHALL be accessible as a `str | None` attribute with value `"Great coffee from a Tokyo cafe"`
 
 #### Scenario: Create a CoffeeBean with minimal fields
 - **WHEN** a `CoffeeBean` is instantiated with only `created_at` set
-- **THEN** all other fields (except `created_at`) SHALL default to `None`, including `bean_type`
+- **THEN** all other fields (except `created_at`) SHALL default to `None`, including `comments`
 
 #### Scenario: from_row ignores origin column
 - **WHEN** `CoffeeBean.from_row(row)` is called on a row that contains an `origin` column
@@ -67,18 +66,18 @@ The `CoffeeBean` class SHALL provide a classmethod `from_scan(data: dict)` that 
 - **THEN** `country_grown` SHALL remain `"Kenya"` and `origin` SHALL be discarded
 
 ### Requirement: Route handlers use CoffeeBean
-All API route handlers (`POST /api/scan`, `GET /api/coffees`, `POST /api/coffees`, `DELETE /api/coffees/<id>`) SHALL use `CoffeeBean` instances for data handling instead of raw dicts.
+All API route handlers (`POST /api/scan`, `GET /api/coffees`, `POST /api/coffees`, `DELETE /api/coffees/<id>`) SHALL use `CoffeeBean` instances for data handling instead of raw dicts. The `comments` field SHALL be read from `data.get("comments")` in save and update routes.
 
 #### Scenario: Scan endpoint returns CoffeeBean-shaped response
 - **WHEN** a POST to `/api/scan` succeeds
-- **THEN** the response JSON SHALL include the new fields (`country_grown`, `country_roasted`, `price`) alongside existing ones
+- **THEN** the response JSON SHALL include `comments` (not `notes`) alongside other fields
 
-#### Scenario: Save endpoint accepts new fields
-- **WHEN** a POST to `/api/coffees` includes `brew_score`, `espresso_score`, `price`, `country_grown`, and `country_roasted`
-- **THEN** all fields SHALL be persisted to the database
+#### Scenario: Save endpoint accepts comments field
+- **WHEN** a POST to `/api/coffees` includes `comments`
+- **THEN** the `comments` value SHALL be persisted to the database
 
 ### Requirement: Updated Claude vision prompt
-The Claude vision prompt SHALL NOT request `origin`. The prompt SHALL request `country_grown` with the instruction: "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend)." The prompt SHALL request `bean_type` in the JSON template with guidance: "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all separated by commas if multiple; null if not stated on the bag."
+The Claude vision prompt SHALL NOT request `origin`. The prompt SHALL request `country_grown` with the instruction: "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend)." The prompt SHALL request `bean_type` in the JSON template with guidance: "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all separated by commas if multiple; null if not stated on the bag." The prompt SHALL instruct Claude to return `tasting_notes` as a comma-separated list of individual notes (e.g. "Chocolate, Strawberry, Peach") rather than copying raw text with arbitrary separators.
 
 #### Scenario: Prompt does not ask for origin
 - **WHEN** a coffee bag image is sent to the Claude API
@@ -99,6 +98,10 @@ The Claude vision prompt SHALL NOT request `origin`. The prompt SHALL request `c
 #### Scenario: Scan returns null bean_type when not on bag
 - **WHEN** a coffee bag image that does not mention bean type/variety is scanned
 - **THEN** the scan result SHALL include `bean_type` with value `null`
+
+#### Scenario: Tasting notes returned as comma-separated list
+- **WHEN** a coffee bag with tasting notes "Björnbär / Röd Grapefrukt / Tranbär" is scanned
+- **THEN** the scan result SHALL return tasting_notes as "Björnbär, Röd Grapefrukt, Tranbär" (comma-separated, preserving original language)
 
 ### Requirement: Database schema includes bean_type
 The `coffees` table SHALL include a `bean_type TEXT` column. The `init_db()` migration SHALL add this column to existing databases that lack it.

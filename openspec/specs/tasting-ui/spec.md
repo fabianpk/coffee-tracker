@@ -13,16 +13,17 @@ The modal SHALL contain:
 - A brew type selector with at least the options: **Espresso**, **Brew** — rendered as buttons or a select
 - A dosage dropdown/select with values from 10.0gr to 20.0gr in 0.1gr increments
 - A score picker (1–5 stars or buttons, same visual pattern as existing score inputs)
-- A notes textarea
+- A tasting notes input labeled "Tasting Notes" with placeholder "e.g. Chocolate, Berry, Citrus" for comma-separated flavor notes
+- A comments textarea labeled "General Comments"
 - A **Save Tasting** button and a **Cancel** button
 
 #### Scenario: Open tasting modal
 - **WHEN** the user clicks "Conduct Tasting"
 - **THEN** the tasting modal SHALL appear with the coffee dropdown populated from the database
 
-#### Scenario: Save a tasting
-- **WHEN** the user selects a coffee, picks a brew type, enters a score, and clicks "Save Tasting"
-- **THEN** the tasting SHALL be posted to `POST /api/tastings` and the modal SHALL close on success
+#### Scenario: Save a tasting with tasting notes
+- **WHEN** the user fills in tasting notes "Chocolate, Berry" and clicks "Save Tasting"
+- **THEN** the tasting SHALL be posted to `POST /api/tastings` with `tasting_notes: "Chocolate, Berry"` and `comments`
 
 #### Scenario: Cancel tasting
 - **WHEN** the user clicks "Cancel" in the tasting modal
@@ -42,9 +43,17 @@ Each coffee card in the list SHALL display the `average_score` returned by the A
 ### Requirement: Tasting history per coffee card
 Each coffee card SHALL include a collapsible section that shows the tasting history for that coffee, fetched from `GET /api/tastings?coffee_id=<id>`.
 
-Each tasting entry SHALL show: brew type, dosage, score, notes, date, and a **delete** button.
+Each tasting entry SHALL show: brew type, dosage, score, tasting notes (as tags), comments, date, and a **delete** button.
 
 Clicking the delete button SHALL confirm with the user, then call `DELETE /api/tastings/<id>`. On success, the tasting list SHALL refresh and the coffee list SHALL reload to update the average score.
+
+#### Scenario: Tasting entry displays tasting notes as tags
+- **WHEN** a tasting history entry has `tasting_notes: "Chocolate, Berry"`
+- **THEN** the entry SHALL display "Chocolate" and "Berry" as individual tag elements
+
+#### Scenario: Tasting entry displays comments
+- **WHEN** a tasting history entry is rendered with a comments value
+- **THEN** the entry SHALL display the comments text
 
 #### Scenario: Delete a tasting from history
 - **WHEN** the user clicks "delete" on a tasting entry and confirms

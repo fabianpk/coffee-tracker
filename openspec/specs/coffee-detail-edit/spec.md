@@ -1,5 +1,5 @@
 ### Requirement: Coffee detail panel
-The system SHALL display a full-screen overlay panel when the user taps/clicks a coffee card in the list. The panel SHALL show all CoffeeBean fields (roaster, name, country_grown, country_roasted, origin, process, roast_level, tasting_notes, weight, price, brew_score, espresso_score, notes) as editable inputs. The `other` field SHALL NOT be shown in the detail panel.
+The system SHALL display a full-screen overlay panel when the user taps/clicks a coffee card in the list. The panel SHALL show all CoffeeBean fields (roaster, name, country_grown, country_roasted, origin, process, roast_level, tasting_notes, weight, price, brew_score, espresso_score, notes) as editable inputs. The `other` field SHALL NOT be shown in the detail panel. The `comments` field SHALL be displayed as a textarea labeled "General Comments".
 
 #### Scenario: Open detail panel by clicking a card
 - **WHEN** the user clicks a coffee item in the list
@@ -7,7 +7,7 @@ The system SHALL display a full-screen overlay panel when the user taps/clicks a
 
 #### Scenario: Detail panel shows all fields
 - **WHEN** the detail panel is open
-- **THEN** all CoffeeBean fields SHALL be displayed as editable form inputs, with no `other` field present
+- **THEN** all CoffeeBean fields SHALL be displayed as editable form inputs, with the `comments` textarea labeled "General Comments" and no `other` field present
 
 #### Scenario: Close detail panel without saving
 - **WHEN** the user clicks the close button with no unsaved changes
@@ -17,9 +17,9 @@ The system SHALL display a full-screen overlay panel when the user taps/clicks a
 - **WHEN** the user has edited one or more fields and clicks the close button
 - **THEN** the system SHALL prompt the user to confirm discarding changes before closing
 
-#### Scenario: Notes field placeholder
+#### Scenario: Comments field placeholder
 - **WHEN** the detail panel is open
-- **THEN** the notes textarea SHALL display "Other notes" as placeholder text
+- **THEN** the comments textarea SHALL display "General comments" as placeholder text
 
 ### Requirement: Edit and save a coffee entry
 The system SHALL allow the user to edit any field in the detail panel and save changes back to the database via `PUT /api/coffees/<id>`.

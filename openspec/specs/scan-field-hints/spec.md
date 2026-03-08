@@ -53,10 +53,10 @@ The scan review form SHALL display the "Other (from scan)" field as a read-only 
 
 #### Scenario: Review form notes placeholder
 - **WHEN** the scan review form is displayed
-- **THEN** the notes textarea SHALL display "Other notes" as placeholder text
+- **THEN** the comments textarea SHALL display "General comments" as placeholder text
 
 ### Requirement: Vision model upgrade
-The system SHALL use `claude-sonnet-4-6` (instead of `claude-haiku-4-5-20251001`) for both image-based extraction (`extract_coffee_details`) and text-based extraction (`extract_coffee_from_text`) to improve text recognition accuracy.
+The system SHALL use `claude-sonnet-4-6` for both image-based extraction (`extract_coffee_details`) and text-based extraction (`extract_coffee_from_text`). The tasting_notes instruction in both prompts SHALL request a comma-separated list of individual notes rather than raw text with arbitrary separators.
 
 #### Scenario: Image scan uses upgraded model
 - **WHEN** an image is sent to `extract_coffee_details()`
@@ -65,3 +65,11 @@ The system SHALL use `claude-sonnet-4-6` (instead of `claude-haiku-4-5-20251001`
 #### Scenario: Text scan uses upgraded model
 - **WHEN** text is sent to `extract_coffee_from_text()`
 - **THEN** the Claude API call SHALL use model `claude-sonnet-4-6`
+
+#### Scenario: Image scan prompt requests comma-separated tasting notes
+- **WHEN** an image is sent to `extract_coffee_details()`
+- **THEN** the prompt SHALL instruct Claude to return tasting_notes as a comma-separated list
+
+#### Scenario: Text scan prompt requests comma-separated tasting notes
+- **WHEN** text is sent to `extract_coffee_from_text()`
+- **THEN** the prompt SHALL instruct Claude to return tasting_notes as a comma-separated list

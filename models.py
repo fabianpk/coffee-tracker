@@ -17,7 +17,7 @@ class CoffeeBean:
     tasting_notes: str | None = None
     weight: str | None = None
     price: str | None = None
-    notes: str | None = None
+    comments: str | None = None
     created_at: str = ""
 
     def __post_init__(self):
@@ -62,7 +62,8 @@ class Tasting:
     brew_type: str | None = None
     dosage: float | None = None
     score: int | None = None
-    notes: str | None = None
+    tasting_notes: str | None = None
+    comments: str | None = None
     created_at: str = ""
 
     def __post_init__(self):
@@ -79,5 +80,6 @@ class Tasting:
 
     @classmethod
     def from_row(cls, row) -> "Tasting":
-        """Create a Tasting from a sqlite3.Row."""
-        return cls(**{k: row[k] for k in row.keys()})
+        """Create a Tasting from a sqlite3.Row. Ignores unknown columns."""
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: row[k] for k in row.keys() if k in known})

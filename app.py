@@ -68,7 +68,7 @@ def init_db():
             price TEXT,
             brew_score INTEGER,
             espresso_score INTEGER,
-            notes TEXT,
+            comments TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -79,7 +79,8 @@ def init_db():
             brew_type TEXT,
             dosage REAL,
             score INTEGER,
-            notes TEXT,
+            tasting_notes TEXT,
+            comments TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -219,7 +220,7 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                             "country_grown is the country or region where the beans were grown; list all separated by commas if multiple (e.g. a blend). "
                             "country_roasted is the country where the beans were roasted. "
                             "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated on the bag. "
-                            "For tasting_notes, copy the exact words from the bag (e.g. 'Björnbär / Röd Grapefrukt / Tranbär'). "
+                            "For tasting_notes, return a comma-separated list of individual flavor notes (e.g. 'Björnbär, Röd Grapefrukt, Tranbär'). Preserve the original language but normalize separators to commas. "
                             "Use null for fields you can't find. Be concise."
                             + (f"\n\nAdditional context about expected values:\n{hints}" if hints else "")
                         ),
@@ -257,7 +258,7 @@ def extract_coffee_from_text(page_text: str) -> dict:
                     "country_grown is the country or region where the beans were grown; list all separated by commas if multiple. "
                     "country_roasted is the country where the beans were roasted. "
                     "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated. "
-                    "For tasting_notes, copy the exact words from the page. "
+                    "For tasting_notes, return a comma-separated list of individual flavor notes. Preserve the original language but normalize separators to commas. "
                     "Use null for fields you can't find. Be concise."
                     + (f"\n\nAdditional context about expected values:\n{hints}" if hints else "")
                     + f"\n\nPage text:\n{page_text}"
@@ -362,13 +363,44 @@ def scan():
 @app.route("/api/coffees", methods=["GET"])
 def list_coffees():
     db = get_db()
-    rows = db.execute("SELECT * FROM coffees ORDER BY created_at DESC").fetchall()
+    note_filter = request.args.get("note")
+    if note_filter:
+        # Match individual note in comma-separated list (case-insensitive)
+        pattern = f"%{note_filter}%"
+        rows = db.execute(
+            "SELECT * FROM coffees WHERE tasting_notes LIKE ? COLLATE NOCASE ORDER BY created_at DESC",
+            (pattern,),
+        ).fetchall()
+        # Post-filter to match whole individual notes, not substrings
+        filtered = []
+        for r in rows:
+            notes = [n.strip() for n in (r["tasting_notes"] or "").split(",")]
+            if any(n.lower() == note_filter.lower() for n in notes):
+                filtered.append(r)
+        rows = filtered
+    else:
+        rows = db.execute("SELECT * FROM coffees ORDER BY created_at DESC").fetchall()
     coffees = []
     for r in rows:
         avg = db.execute("SELECT ROUND(AVG(score), 1) FROM tastings WHERE coffee_id = ?", (r["id"],)).fetchone()[0]
         coffees.append(CoffeeBean.from_row(r).to_dict(average_score=avg))
     db.close()
     return jsonify(coffees)
+
+
+@app.route("/api/tasting-notes", methods=["GET"])
+def list_tasting_notes():
+    """Return sorted unique tasting notes across all coffees."""
+    db = get_db()
+    rows = db.execute("SELECT tasting_notes FROM coffees WHERE tasting_notes IS NOT NULL").fetchall()
+    db.close()
+    notes = set()
+    for r in rows:
+        for note in r["tasting_notes"].split(","):
+            stripped = note.strip()
+            if stripped:
+                notes.add(stripped)
+    return jsonify(sorted(notes, key=str.lower))
 
 
 @app.route("/api/coffees", methods=["POST"])
@@ -385,7 +417,7 @@ def save_coffee():
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        notes=data.get("notes"),
+        comments=data.get("comments"),
     )
     row = coffee.to_row()
     columns = ", ".join(row.keys())
@@ -422,7 +454,7 @@ def update_coffee(coffee_id):
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        notes=data.get("notes"),
+        comments=data.get("comments"),
         created_at=data.get("created_at", ""),
     )
     row = coffee.to_row()
@@ -461,7 +493,8 @@ def save_tasting():
         brew_type=data.get("brew_type"),
         dosage=data.get("dosage"),
         score=data.get("score"),
-        notes=data.get("notes"),
+        tasting_notes=data.get("tasting_notes"),
+        comments=data.get("comments"),
     )
     row = tasting.to_row()
     columns = ", ".join(row.keys())

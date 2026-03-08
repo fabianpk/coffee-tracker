@@ -62,6 +62,7 @@ def scan_coffee(image_path: str) -> CoffeeBean:
                             "For origin, list all countries/regions separated by commas if multiple (e.g. a blend). "
                             "country_grown is the country where the beans were grown. "
                             "country_roasted is the country where the beans were roasted. "
+                            "For tasting_notes, return a comma-separated list of individual flavor notes. Preserve the original language but normalize separators to commas. "
                             "Use null for fields you can't find. Be concise."
                         ),
                     },
