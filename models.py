@@ -17,7 +17,6 @@ class CoffeeBean:
     tasting_notes: str | None = None
     weight: str | None = None
     price: str | None = None
-    other: str | None = None
     notes: str | None = None
     created_at: str = ""
 

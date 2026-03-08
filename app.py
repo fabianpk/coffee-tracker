@@ -68,7 +68,6 @@ def init_db():
             price TEXT,
             brew_score INTEGER,
             espresso_score INTEGER,
-            other TEXT,
             notes TEXT,
             created_at TEXT NOT NULL
         )
@@ -195,7 +194,7 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
     hints = load_scan_hints()
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[
             {
@@ -243,7 +242,7 @@ def extract_coffee_from_text(page_text: str) -> dict:
     hints = load_scan_hints()
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[
             {
@@ -386,7 +385,6 @@ def save_coffee():
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        other=data.get("other"),
         notes=data.get("notes"),
     )
     row = coffee.to_row()
@@ -424,7 +422,6 @@ def update_coffee(coffee_id):
         tasting_notes=data.get("tasting_notes"),
         weight=data.get("weight"),
         price=data.get("price"),
-        other=data.get("other"),
         notes=data.get("notes"),
         created_at=data.get("created_at", ""),
     )
