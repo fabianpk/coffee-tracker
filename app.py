@@ -31,6 +31,17 @@ app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "coffees.db"
 
 SUPPORTED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+SCAN_HINTS_PATH = Path(__file__).parent / "scan_hints.md"
+MAX_HINTS_CHARS = 2000
+
+
+def load_scan_hints() -> str:
+    """Load scan hints from scan_hints.md. Returns empty string if missing/empty."""
+    try:
+        text = SCAN_HINTS_PATH.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+    return text[:MAX_HINTS_CHARS] if text else ""
 
 
 def get_db():
@@ -181,6 +192,7 @@ def fetch_page_text(url: str) -> str | None:
 
 def extract_coffee_details(image_data: str, media_type: str) -> dict:
     """Send image to Claude and extract coffee details as structured data."""
+    hints = load_scan_hints()
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -210,6 +222,7 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
                             "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated on the bag. "
                             "For tasting_notes, copy the exact words from the bag (e.g. 'Björnbär / Röd Grapefrukt / Tranbär'). "
                             "Use null for fields you can't find. Be concise."
+                            + (f"\n\nAdditional context about expected values:\n{hints}" if hints else "")
                         ),
                     },
                 ],
@@ -227,6 +240,7 @@ def extract_coffee_details(image_data: str, media_type: str) -> dict:
 
 def extract_coffee_from_text(page_text: str) -> dict:
     """Send product page text to Claude and extract coffee details as structured data."""
+    hints = load_scan_hints()
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -245,8 +259,9 @@ def extract_coffee_from_text(page_text: str) -> dict:
                     "country_roasted is the country where the beans were roasted. "
                     "bean_type is the species or variety of the coffee bean (e.g. Arabica, Robusta, Bourbon, Gesha, SL28); list all if multiple; null if not stated. "
                     "For tasting_notes, copy the exact words from the page. "
-                    "Use null for fields you can't find. Be concise.\n\n"
-                    f"Page text:\n{page_text}"
+                    "Use null for fields you can't find. Be concise."
+                    + (f"\n\nAdditional context about expected values:\n{hints}" if hints else "")
+                    + f"\n\nPage text:\n{page_text}"
                 ),
             }
         ],

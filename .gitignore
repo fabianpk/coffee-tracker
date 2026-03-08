@@ -4,3 +4,4 @@ __pycache__/
 .env
 coffees.db
 debug_images/
+scan_hints.md
