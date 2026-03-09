@@ -171,8 +171,31 @@
 
         .empty { text-align: center; color: #666; padding: 40px 0; }
 
-        #scan-form, #review-form { display: none; }
-        #scan-form.active, #review-form.active { display: block; }
+        #review-form { display: none; }
+        #review-form.active { display: block; }
+
+        .autocomplete-wrapper { position: relative; }
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .autocomplete-item:hover, .autocomplete-item.highlighted {
+            background: #444;
+        }
 
 
 
@@ -298,13 +321,8 @@
     <h1>Coffee Tracker</h1>
 
     <div class="top-buttons">
-        <label class="scan-btn" for="camera-input">Scan Coffee</label>
+        <button class="scan-btn" id="add-coffee-btn">Add Coffee to Database</button>
         <button class="tasting-btn" id="tasting-btn">Conduct Tasting</button>
-    </div>
-    <input type="file" id="camera-input" accept="image/*">
-
-    <div id="scan-form" class="card">
-        <p><span class="spinner"></span> Analyzing your coffee...</p>
     </div>
 
     <div id="review-form" class="card">
@@ -315,7 +333,10 @@
         <div id="dedup-banner" style="display:none;background:#8B5E3C;color:white;padding:10px;border-radius:8px;margin-bottom:12px;font-size:14px">
             A coffee with this name already exists.
         </div>
-        <div class="field"><label>Roaster</label><input id="f-roaster"></div>
+        <div id="scan-spinner" style="display:none;text-align:center;padding:12px"><span class="spinner"></span> Analyzing your coffee...</div>
+        <button class="btn-rescan" id="form-scan-btn" type="button">Scan from Photo</button>
+        <input type="file" id="camera-input" accept="image/*" style="display:none">
+        <div class="field"><label>Roaster</label><div class="autocomplete-wrapper"><input id="f-roaster"><div class="autocomplete-dropdown" id="f-roaster-dropdown"></div></div></div>
         <div class="field"><label>Coffee Name</label><input id="f-name"></div>
         <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
@@ -325,7 +346,7 @@
         <div class="field"><label>Tasting Notes</label><input id="f-tasting_notes"></div>
         <div class="field"><label>Weight</label><input id="f-weight"></div>
         <div class="field"><label>Price</label><input id="f-price"></div>
-        <div class="field"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
+        <div class="field" id="f-other-field" style="display:none"><label>Other (from scan)</label><textarea id="f-other" style="min-height:80px;font-size:13px;color:#aaa" readonly></textarea></div>
         <div class="field"><label>General Comments</label><textarea id="f-comments" placeholder="General comments"></textarea></div>
         <div class="actions" id="normal-actions">
             <button class="btn-cancel" id="cancel-btn">Cancel</button>
@@ -344,7 +365,7 @@
             <h2>Edit Coffee</h2>
             <button class="close-btn" id="detail-close-btn" aria-label="Close">&times;</button>
         </div>
-        <div class="field"><label>Roaster</label><input id="d-roaster"></div>
+        <div class="field"><label>Roaster</label><div class="autocomplete-wrapper"><input id="d-roaster"><div class="autocomplete-dropdown" id="d-roaster-dropdown"></div></div></div>
         <div class="field"><label>Coffee Name</label><input id="d-name"></div>
         <div class="field"><label>Country Grown</label><input id="d-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="d-country_roasted"></div>
@@ -414,20 +435,48 @@
         <span>Filtering by: <strong id="filter-note-name"></strong></span>
         <button id="clear-filter-btn" aria-label="Clear filter">&times;</button>
     </div>
-    <div id="coffee-list"><p class="empty">No coffees yet. Scan your first bag!</p></div>
+    <div id="coffee-list"><p class="empty">No coffees yet. Add your first coffee!</p></div>
 
     <script>
         const $ = id => document.getElementById(id);
 
-        // ── Initial scan ──────────────────────────────────────────────────────
+        // ── Add coffee / scan ─────────────────────────────────────────────────
+
+        function openAddForm() {
+            // Clear all fields
+            for (const key of ["roaster", "name", "country_grown", "country_roasted", "bean_type", "process", "roast_level", "tasting_notes", "weight", "price"]) {
+                $("f-" + key).value = "";
+            }
+            $("f-other").value = "";
+            $("f-comments").value = "";
+            // Hide scan-specific UI
+            $("f-other-field").style.display = "none";
+            $("qr-banner").style.display = "none";
+            $("dedup-banner").style.display = "none";
+            $("scan-spinner").style.display = "none";
+            // Reset dedup state
+            dupMatchId = null;
+            $("normal-actions").style.display = "flex";
+            $("dedup-actions").style.display = "none";
+            // Show form
+            $("review-form").classList.add("active");
+        }
+
+        $("add-coffee-btn").addEventListener("click", openAddForm);
+
+        $("form-scan-btn").addEventListener("click", () => {
+            $("camera-input").value = "";
+            $("camera-input").click();
+        });
 
         $("camera-input").addEventListener("change", async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            $("scan-form").classList.add("active");
-            $("review-form").classList.remove("active");
-            $("camera-input").disabled = true;
+            const btn = $("form-scan-btn");
+            btn.disabled = true;
+            btn.textContent = "Scanning...";
+            $("scan-spinner").style.display = "block";
 
             const form = new FormData();
             form.append("image", file);
@@ -443,8 +492,9 @@
             } catch (err) {
                 alert("Error: " + err.message);
             } finally {
-                $("scan-form").classList.remove("active");
-                $("camera-input").disabled = false;
+                btn.disabled = false;
+                btn.textContent = "Scan from Photo";
+                $("scan-spinner").style.display = "none";
                 $("camera-input").value = "";
             }
         });
@@ -459,6 +509,7 @@
                 if (el) el.value = data[key] || "";
             }
             $("f-other").value = data.other || "";
+            $("f-other-field").style.display = data.other ? "block" : "none";
             $("f-comments").value = "";
 
             // Show QR enrichment note
@@ -507,12 +558,31 @@
 
         function closeReviewForm() {
             $("review-form").classList.remove("active");
+            $("f-other-field").style.display = "none";
         }
 
         $("cancel-btn").addEventListener("click", closeReviewForm);
         $("dedup-cancel-btn").addEventListener("click", closeReviewForm);
 
         $("save-btn").addEventListener("click", async () => {
+            // Check for duplicate before saving
+            const formRoaster = $("f-roaster").value.trim().toLowerCase();
+            const formName = $("f-name").value.trim().toLowerCase();
+            if (formRoaster && formName) {
+                const match = coffeeCache.find(c =>
+                    (c.roaster || "").trim().toLowerCase() === formRoaster &&
+                    (c.name || "").trim().toLowerCase() === formName
+                );
+                if (match) {
+                    dupMatchId = match.id;
+                    dupMatchRoaster = formRoaster;
+                    dupMatchName = formName;
+                    $("dedup-banner").style.display = "block";
+                    $("normal-actions").style.display = "none";
+                    $("dedup-actions").style.display = "flex";
+                    return;
+                }
+            }
             await fetch("/api/coffees", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -520,6 +590,7 @@
             });
             closeReviewForm();
             loadCoffees();
+            loadRoasters();
         });
 
         $("update-existing-btn").addEventListener("click", async () => {
@@ -533,6 +604,7 @@
             if (res.ok) {
                 closeReviewForm();
                 loadCoffees();
+                loadRoasters();
             } else {
                 alert("Update failed");
             }
@@ -552,6 +624,7 @@
             });
             closeReviewForm();
             loadCoffees();
+            loadRoasters();
         });
 
         // ── Detail panel ──────────────────────────────────────────────────────
@@ -601,6 +674,7 @@
                 $("detail-panel").classList.remove("active");
                 detailCoffeeId = null;
                 loadCoffees();
+                loadRoasters();
             } else {
                 alert("Save failed");
             }
@@ -690,7 +764,7 @@
             const list = $("coffee-list");
 
             if (coffeeCache.length === 0) {
-                list.innerHTML = '<p class="empty">No coffees yet. Scan your first bag!</p>';
+                list.innerHTML = '<p class="empty">No coffees yet. Add your first coffee!</p>';
                 return;
             }
 
@@ -856,7 +930,80 @@
             return d.innerHTML;
         }
 
+        // ── Roaster autocomplete ─────────────────────────────────────────────
+
+        let roasterCache = [];
+
+        async function loadRoasters() {
+            try {
+                const res = await fetch("/api/roasters");
+                roasterCache = await res.json();
+            } catch (e) { /* ignore */ }
+        }
+
+        function setupAutocomplete(inputId, dropdownId) {
+            const input = $(inputId);
+            const dropdown = $(dropdownId);
+            let highlightIdx = -1;
+
+            function render(items) {
+                if (items.length === 0) { dropdown.style.display = "none"; return; }
+                dropdown.innerHTML = items.map((r, i) =>
+                    `<div class="autocomplete-item${i === highlightIdx ? ' highlighted' : ''}">${esc(r)}</div>`
+                ).join("");
+                dropdown.style.display = "block";
+            }
+
+            function getMatches() {
+                const q = input.value.trim().toLowerCase();
+                if (!q) return [];
+                return roasterCache.filter(r => r.toLowerCase().startsWith(q));
+            }
+
+            input.addEventListener("input", () => {
+                highlightIdx = -1;
+                render(getMatches());
+            });
+
+            input.addEventListener("keydown", (e) => {
+                const items = dropdown.querySelectorAll(".autocomplete-item");
+                if (!items.length) return;
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
+                    render(getMatches());
+                } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    highlightIdx = Math.max(highlightIdx - 1, 0);
+                    render(getMatches());
+                } else if (e.key === "Enter" && highlightIdx >= 0) {
+                    e.preventDefault();
+                    input.value = items[highlightIdx].textContent;
+                    dropdown.style.display = "none";
+                } else if (e.key === "Escape") {
+                    dropdown.style.display = "none";
+                }
+            });
+
+            dropdown.addEventListener("mousedown", (e) => {
+                const item = e.target.closest(".autocomplete-item");
+                if (item) {
+                    e.preventDefault();
+                    input.value = item.textContent;
+                    dropdown.style.display = "none";
+                }
+            });
+
+            input.addEventListener("blur", () => {
+                setTimeout(() => { dropdown.style.display = "none"; }, 150);
+            });
+        }
+
+        setupAutocomplete("f-roaster", "f-roaster-dropdown");
+        setupAutocomplete("d-roaster", "d-roaster-dropdown");
+
         loadCoffees();
+        loadRoasters();
     </script>
 </body>
 </html>

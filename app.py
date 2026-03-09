@@ -405,6 +405,19 @@ def list_tasting_notes():
     return jsonify(sorted(notes, key=str.lower))
 
 
+@app.route("/api/roasters", methods=["GET"])
+def list_roasters():
+    """Return distinct roaster names, optionally filtered by prefix."""
+    db = get_db()
+    rows = db.execute("SELECT DISTINCT roaster FROM coffees WHERE roaster IS NOT NULL AND roaster != ''").fetchall()
+    db.close()
+    roasters = sorted([r["roaster"] for r in rows], key=str.lower)
+    q = request.args.get("q", "").strip().lower()
+    if q:
+        roasters = [r for r in roasters if r.lower().startswith(q)]
+    return jsonify(roasters)
+
+
 @app.route("/api/coffees", methods=["POST"])
 def save_coffee():
     data = request.json
