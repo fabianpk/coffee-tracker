@@ -337,7 +337,7 @@
         <button class="btn-rescan" id="form-scan-btn" type="button">Scan from Photo</button>
         <input type="file" id="camera-input" accept="image/*" style="display:none">
         <div class="field"><label>Roaster</label><div class="autocomplete-wrapper"><input id="f-roaster"><div class="autocomplete-dropdown" id="f-roaster-dropdown"></div></div></div>
-        <div class="field"><label>Coffee Name</label><input id="f-name"></div>
+        <div class="field"><label>Coffee Name</label><div style="display:flex;gap:8px"><input id="f-name" style="flex:1"><button id="f-lookup-btn" type="button" style="display:none;padding:8px 14px;font-size:14px;font-weight:600;background:#5a3a1a;color:#d4a574;border:1px solid #7a5a3a;border-radius:8px;cursor:pointer;white-space:nowrap">Lookup</button></div></div>
         <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
         <div class="field"><label>Bean Type</label><input id="f-bean_type" placeholder="e.g. Arabica, Bourbon, Robusta"></div>
@@ -449,8 +449,9 @@
             }
             $("f-other").value = "";
             $("f-comments").value = "";
-            // Hide scan-specific UI
+            // Hide scan-specific UI and lookup button
             $("f-other-field").style.display = "none";
+            $("f-lookup-btn").style.display = "none";
             $("qr-banner").style.display = "none";
             $("dedup-banner").style.display = "none";
             $("scan-spinner").style.display = "none";
@@ -538,6 +539,8 @@
             }
 
             $("review-form").classList.add("active");
+            // Check lookup availability for the filled roaster
+            checkLookupAvailable();
         }
 
         function getFormCoffee() {
@@ -1001,6 +1004,76 @@
 
         setupAutocomplete("f-roaster", "f-roaster-dropdown");
         setupAutocomplete("d-roaster", "d-roaster-dropdown");
+
+        // ── Roastery lookup ───────────────────────────────────────────────────
+
+        let lookupAvailableTimeout = null;
+
+        function checkLookupAvailable() {
+            clearTimeout(lookupAvailableTimeout);
+            lookupAvailableTimeout = setTimeout(async () => {
+                const roaster = $("f-roaster").value.trim();
+                const btn = $("f-lookup-btn");
+                if (!roaster) { btn.style.display = "none"; return; }
+                try {
+                    const res = await fetch("/api/lookup/available?roaster=" + encodeURIComponent(roaster));
+                    const data = await res.json();
+                    btn.style.display = data.available ? "block" : "none";
+                } catch {
+                    btn.style.display = "none";
+                }
+            }, 300);
+        }
+
+        $("f-roaster").addEventListener("input", checkLookupAvailable);
+        $("f-roaster").addEventListener("change", checkLookupAvailable);
+
+        // Also check after autocomplete selection (blur triggers after dropdown mousedown)
+        const origBlurHandler = $("f-roaster").onblur;
+        $("f-roaster").addEventListener("blur", () => {
+            setTimeout(checkLookupAvailable, 200);
+        });
+
+        $("f-lookup-btn").addEventListener("click", async () => {
+            const roaster = $("f-roaster").value.trim();
+            const coffeeName = $("f-name").value.trim();
+            if (!roaster || !coffeeName) {
+                alert("Enter both roaster and coffee name first");
+                return;
+            }
+            const btn = $("f-lookup-btn");
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Looking up...";
+            try {
+                const res = await fetch("/api/lookup", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ roaster, coffee_name: coffeeName }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || "Lookup failed");
+                    return;
+                }
+                // Fill empty fields only
+                const fieldMap = {
+                    name: "f-name", country_grown: "f-country_grown", country_roasted: "f-country_roasted",
+                    bean_type: "f-bean_type", process: "f-process", roast_level: "f-roast_level",
+                    tasting_notes: "f-tasting_notes", weight: "f-weight", price: "f-price",
+                };
+                for (const [key, id] of Object.entries(fieldMap)) {
+                    if (data[key] && !$(id).value) {
+                        $(id).value = data[key];
+                    }
+                }
+            } catch (err) {
+                alert("Lookup error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        });
 
         loadCoffees();
         loadRoasters();

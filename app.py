@@ -24,6 +24,7 @@ import pillow_heif
 from pyzbar.pyzbar import decode as decode_qr
 
 from models import CoffeeBean, Tasting
+from lookup import lookup_coffee, has_provider
 
 pillow_heif.register_heif_opener()
 
@@ -544,6 +545,27 @@ def list_tastings():
     ).fetchall()
     db.close()
     return jsonify([Tasting.from_row(r).to_dict() for r in rows])
+
+
+@app.route("/api/lookup", methods=["POST"])
+def api_lookup():
+    data = request.json or {}
+    roaster = data.get("roaster", "").strip()
+    coffee_name = data.get("coffee_name", "").strip()
+    if not roaster or not coffee_name:
+        return jsonify({"error": "roaster and coffee_name are required"}), 400
+    if not has_provider(roaster):
+        return jsonify({"error": "No lookup provider for this roaster"}), 404
+    result = lookup_coffee(roaster, coffee_name)
+    if not result:
+        return jsonify({"error": "Coffee not found"}), 404
+    return jsonify(result)
+
+
+@app.route("/api/lookup/available", methods=["GET"])
+def api_lookup_available():
+    roaster = request.args.get("roaster", "").strip()
+    return jsonify({"available": has_provider(roaster)})
 
 
 init_db()
