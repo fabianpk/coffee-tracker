@@ -1,15 +1,12 @@
 """Coffee roastery lookup — fetch product details from roastery websites."""
 
 import json
-import os
 import re
+from abc import ABC, abstractmethod
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus
 from urllib.request import urlopen, Request
-from urllib.error import URLError
-
-import anthropic
 
 
 def _fetch_json(url: str) -> dict | list | None:
@@ -54,13 +51,95 @@ def _strip_html(html: str) -> str:
     return s.get_text().strip()
 
 
-# ── Shopify Provider ────────────────────────────────────────────────────────
+# ── Base Class ─────────────────────────────────────────────────────────────
 
-class ShopifyProvider:
-    """Generic lookup provider for any Shopify-based roastery."""
+class CoffeeSearcher(ABC):
+    """Base class for roastery lookup plugins."""
 
-    def __init__(self, base_url: str):
+    @abstractmethod
+    def search(self, coffee_name: str) -> str | None:
+        """Search for a product. Returns an identifier (handle, URL, etc.) or None."""
+
+    @abstractmethod
+    def fetch_product(self, identifier: str) -> dict | None:
+        """Fetch product data using the identifier from search()."""
+
+    @abstractmethod
+    def extract(self, product_data: dict) -> dict:
+        """Extract CoffeeBean fields from product data."""
+
+    def lookup(self, coffee_name: str) -> dict | None:
+        """Full lookup: search → fetch_product → extract."""
+        identifier = self.search(coffee_name)
+        if not identifier:
+            return None
+        product_data = self.fetch_product(identifier)
+        if not product_data:
+            return None
+        return self.extract(product_data)
+
+
+# ── Shopify Searcher ───────────────────────────────────────────────────────
+
+FIELD_LABELS: dict[str, list[str]] = {
+    "country_grown": [
+        "Country", "Origin", "Region", "Land", "Ursprung", "Odlingsland",
+        "Produced in", "Farm Location", "Growing Region",
+    ],
+    "bean_type": [
+        "Variety", "Varietal", "Bean", "Sort", "Art", "Varieties",
+        "Cultivar", "Species",
+    ],
+    "process": [
+        "Process", "Processing", "Processmetod", "Förädling",
+        "Processing Method",
+    ],
+    "roast_level": [
+        "Roast", "Roast Level", "Rostning", "Rostgrad", "Roast Profile",
+    ],
+    "tasting_notes": [
+        "Tasting Notes", "Tasting notes", "Notes", "Smaknoter", "Smaknot",
+        "Flavor", "Flavour", "Flavors", "Flavours", "Cup Profile",
+        "Smakprofil",
+    ],
+}
+
+
+def _extract_labeled_fields(text: str, labels: dict[str, list[str]] | None = None) -> dict:
+    """Extract field values from text by matching known labels.
+
+    Looks for patterns like "Label: value" or "Label - value" where value
+    extends to the next label, sentence boundary, or line break.
+    """
+    if labels is None:
+        labels = FIELD_LABELS
+    result = {}
+    for field, label_list in labels.items():
+        for label in label_list:
+            # Match "Label:" or "Label -" followed by the value
+            # Value ends at next known label, period+space, or double space
+            pattern = re.compile(
+                rf"(?:^|\s|>){re.escape(label)}\s*[:–\-]\s*(.+?)(?:\s{{2,}}|\n|$)",
+                re.IGNORECASE,
+            )
+            m = pattern.search(text)
+            if m:
+                value = m.group(1).strip().rstrip(".")
+                if value and len(value) < 200:
+                    result[field] = value
+                    break
+    return result
+
+
+class ShopifySearcher(CoffeeSearcher):
+    """Deterministic lookup provider for Shopify-based roasteries."""
+
+    def __init__(self, base_url: str, extra_labels: dict[str, list[str]] | None = None):
         self.base_url = f"https://www.{base_url}" if not base_url.startswith("http") else base_url
+        self.labels = dict(FIELD_LABELS)
+        if extra_labels:
+            for field, extra in extra_labels.items():
+                self.labels[field] = self.labels.get(field, []) + extra
 
     def search(self, coffee_name: str) -> str | None:
         """Search for a product and return the best matching handle."""
@@ -74,7 +153,6 @@ class ShopifyProvider:
             return None
         if not products:
             return None
-        # Pick best matching product by title similarity
         query_lower = coffee_name.lower()
         best_handle = None
         best_ratio = 0.0
@@ -95,87 +173,35 @@ class ShopifyProvider:
         return data.get("product")
 
     def extract(self, product: dict) -> dict:
-        """Extract coffee fields from a Shopify product dict."""
+        """Extract coffee fields from a Shopify product dict using pattern matching."""
         result = {}
-        # Name from title
         title = product.get("title", "")
         if title:
             result["name"] = title
 
-        # Price and weight from first variant
         variants = product.get("variants", [])
         if variants:
             v = variants[0]
             price = v.get("price")
             if price:
                 result["price"] = f"{price} SEK"
-            # Weight: use the option title (e.g. "250g") rather than grams field
             title_v = v.get("title", "")
             if title_v and title_v.lower() != "default title":
                 result["weight"] = title_v
 
-        # Use Claude Haiku to extract coffee details from body_html
         body_html = product.get("body_html", "")
         if body_html:
             body_text = _strip_html(body_html)
             if body_text:
-                extracted = self._extract_with_haiku(body_text)
-                if extracted:
-                    # Merge: Haiku results fill in, but don't overwrite name/price/weight
-                    for key, val in extracted.items():
-                        if val and key not in result:
-                            result[key] = val
+                extracted = _extract_labeled_fields(body_text, self.labels)
+                for key, val in extracted.items():
+                    if val and key not in result:
+                        result[key] = val
 
         return result
 
-    def _extract_with_haiku(self, description_text: str) -> dict | None:
-        """Send product description to Claude Haiku for structured extraction."""
-        try:
-            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
-            message = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=512,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "Extract coffee details from this product description. "
-                        "Keep values in their original language (often Swedish). "
-                        "Respond with ONLY valid JSON, no markdown:\n"
-                        '{"name": "...", "country_grown": "...", "bean_type": "...", '
-                        '"process": "...", "tasting_notes": "...", "roast_level": "..."}\n'
-                        "country_grown: country/region where beans were grown. "
-                        "bean_type: species or variety (e.g. Arabica, Bourbon, Catuai). "
-                        "process: processing method (e.g. Washed, Natural, Honey). "
-                        "tasting_notes: comma-separated flavor notes. "
-                        "roast_level: roast level if mentioned. "
-                        "Use null for fields you can't determine.\n\n"
-                        f"Description:\n{description_text[:4000]}"
-                    ),
-                }],
-            )
-            text = message.content[0].text
-            if "```" in text:
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            data = json.loads(text.strip())
-            # Filter out null values
-            return {k: v for k, v in data.items() if v is not None}
-        except Exception:
-            return None
 
-    def lookup(self, coffee_name: str) -> dict | None:
-        """Full lookup: search → fetch → extract."""
-        handle = self.search(coffee_name)
-        if not handle:
-            return None
-        product = self.fetch_product(handle)
-        if not product:
-            return None
-        return self.extract(product)
-
-
-# ── WooCommerce Provider ────────────────────────────────────────────────────
+# ── WooCommerce Searcher ───────────────────────────────────────────────────
 
 class _LinkExtractor(HTMLParser):
     """Extract product links from WooCommerce search results."""
@@ -228,7 +254,7 @@ class _JsonLdExtractor(HTMLParser):
             self.json_ld_blocks.append(self._current)
 
 
-class WooCommerceProvider:
+class WooCommerceSearcher(CoffeeSearcher):
     """Lookup provider for WooCommerce-based roasteries with JSON-LD data."""
 
     def __init__(self, base_url: str, field_map: dict[str, str]):
@@ -245,7 +271,6 @@ class WooCommerceProvider:
         extractor.feed(html)
         if not extractor.links:
             return None
-        # Pick best match by title similarity
         query_lower = coffee_name.lower()
         best_url = None
         best_ratio = 0.0
@@ -256,50 +281,41 @@ class WooCommerceProvider:
                 best_url = link_url
         return best_url
 
-    def fetch_and_extract(self, product_url: str) -> dict | None:
-        """Fetch a product page and extract data from JSON-LD."""
+    def fetch_product(self, product_url: str) -> dict | None:
+        """Fetch a product page and extract JSON-LD Product entity."""
         html = _fetch_html(product_url)
         if not html:
             return None
         extractor = _JsonLdExtractor()
         extractor.feed(html)
 
-        # Find Product entity in JSON-LD blocks
-        product = None
         for block in extractor.json_ld_blocks:
             try:
                 data = json.loads(block)
             except (json.JSONDecodeError, ValueError):
                 continue
-            # Handle @graph arrays
             if isinstance(data, dict) and "@graph" in data:
                 for item in data["@graph"]:
                     if isinstance(item, dict) and item.get("@type") == "Product":
-                        product = item
-                        break
+                        return item
             elif isinstance(data, dict) and data.get("@type") == "Product":
-                product = data
+                return data
             elif isinstance(data, list):
                 for item in data:
                     if isinstance(item, dict) and item.get("@type") == "Product":
-                        product = item
-                        break
-            if product:
-                break
+                        return item
+        return None
 
-        if not product:
-            return None
-
+    def extract(self, product: dict) -> dict:
+        """Extract CoffeeBean fields from JSON-LD Product entity."""
         result = {}
 
-        # Extract name (clean roastery suffix like "- Gringo Nordic Coffee Roaster")
         raw_name = product.get("name", "")
         if " - " in raw_name:
             result["name"] = raw_name.split(" - ")[0].strip()
         elif raw_name:
             result["name"] = raw_name
 
-        # Extract price from offers
         offers = product.get("offers")
         if isinstance(offers, dict):
             price = offers.get("price") or offers.get("lowPrice")
@@ -312,7 +328,6 @@ class WooCommerceProvider:
             if price:
                 result["price"] = f"{price} {currency}"
 
-        # Extract weight
         weight = product.get("weight")
         if isinstance(weight, dict):
             val = weight.get("value")
@@ -323,7 +338,6 @@ class WooCommerceProvider:
         elif weight:
             result["weight"] = str(weight)
 
-        # Extract additionalProperty fields via field_map
         for prop in product.get("additionalProperty", []):
             prop_name = prop.get("name", "")
             prop_value = prop.get("value", "")
@@ -332,18 +346,11 @@ class WooCommerceProvider:
 
         return result
 
-    def lookup(self, coffee_name: str) -> dict | None:
-        """Full lookup: search → fetch → extract."""
-        product_url = self.search(coffee_name)
-        if not product_url:
-            return None
-        return self.fetch_and_extract(product_url)
-
 
 # ── Provider Registry ───────────────────────────────────────────────────────
 
-PROVIDERS: dict[str, ShopifyProvider | WooCommerceProvider] = {
-    "gringo": WooCommerceProvider(
+PROVIDERS: dict[str, CoffeeSearcher] = {
+    "gringo": WooCommerceSearcher(
         base_url="gringonordic.se",
         field_map={
             "land": "country_grown",
@@ -353,12 +360,12 @@ PROVIDERS: dict[str, ShopifyProvider | WooCommerceProvider] = {
             "vaxthojd": "elevation",
         },
     ),
-    "morgon": ShopifyProvider(base_url="morgoncoffeeroasters.com"),
-    "kafferäven": ShopifyProvider(base_url="kafferaven.se"),
+    "morgon": ShopifySearcher(base_url="morgoncoffeeroasters.com"),
+    "kafferäven": ShopifySearcher(base_url="kafferaven.se"),
 }
 
 
-def _match_provider(roaster: str) -> ShopifyProvider | WooCommerceProvider | None:
+def _match_provider(roaster: str) -> CoffeeSearcher | None:
     """Match a roaster name to a provider using case-insensitive substring matching."""
     if not roaster:
         return None
