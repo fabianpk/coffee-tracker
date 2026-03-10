@@ -392,7 +392,7 @@
     <!-- Tasting modal -->
     <div id="tasting-modal">
         <div class="tasting-modal-content">
-            <h2>Conduct Tasting</h2>
+            <h2 id="tasting-modal-title">Conduct Tasting</h2>
             <div class="field">
                 <label>Coffee</label>
                 <select id="t-coffee" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
@@ -812,6 +812,50 @@
 
         let selectedBrewType = null;
         let selectedTastingScore = null;
+        let editingTastingId = null;
+        let editingCoffeeId = null;
+
+        function editTasting(tastingId, coffeeId) {
+            const t = tastingsCache[tastingId];
+            if (!t) return;
+            editingTastingId = tastingId;
+            editingCoffeeId = coffeeId;
+
+            // Set coffee selector to the tasting's coffee and disable it
+            const sel = $("t-coffee");
+            sel.innerHTML = '';
+            const coffee = coffeeCache.find(c => c.id === coffeeId);
+            const opt = document.createElement("option");
+            opt.value = coffeeId;
+            opt.textContent = coffee ? (coffee.roaster || "Unknown") + " - " + (coffee.name || "Unknown") : "Coffee #" + coffeeId;
+            sel.appendChild(opt);
+            sel.value = coffeeId;
+            sel.disabled = true;
+
+            // Pre-populate brew type
+            selectedBrewType = t.brew_type || null;
+            $("t-brew-type-buttons").querySelectorAll("button").forEach(b =>
+                b.classList.toggle("active", b.dataset.val === selectedBrewType)
+            );
+
+            // Pre-populate dosage
+            $("t-dosage").value = t.dosage != null ? t.dosage : "";
+
+            // Pre-populate score
+            selectedTastingScore = t.score != null ? t.score : null;
+            $("t-score-buttons").querySelectorAll("button").forEach(b =>
+                b.classList.toggle("active", selectedTastingScore != null && parseInt(b.dataset.val) <= selectedTastingScore)
+            );
+
+            // Pre-populate text fields
+            $("t-tasting_notes").value = t.tasting_notes || "";
+            $("t-comments").value = t.comments || "";
+
+            // Set modal to edit mode
+            $("tasting-modal-title").textContent = "Edit Tasting";
+            $("tasting-save-btn").textContent = "Update Tasting";
+            $("tasting-modal").classList.add("active");
+        }
 
         // Populate brew type buttons from registry
         (function() {
@@ -836,8 +880,14 @@
         })();
 
         $("tasting-btn").addEventListener("click", async () => {
+            // Reset edit state
+            editingTastingId = null;
+            editingCoffeeId = null;
+            $("tasting-modal-title").textContent = "Conduct Tasting";
+            $("tasting-save-btn").textContent = "Save Tasting";
             // Populate coffee dropdown
             const sel = $("t-coffee");
+            sel.disabled = false;
             sel.innerHTML = '<option value="">Select a coffee...</option>';
             const res = await fetch("/api/coffees");
             const coffees = await res.json();
@@ -892,13 +942,26 @@
                 tasting_notes: $("t-tasting_notes").value || null,
                 comments: $("t-comments").value || null,
             };
-            const res = await fetch("/api/tastings", {
-                method: "POST",
+            const url = editingTastingId
+                ? "/api/tastings/" + editingTastingId
+                : "/api/tastings";
+            const method = editingTastingId ? "PUT" : "POST";
+            const res = await fetch(url, {
+                method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(tasting),
             });
             if (res.ok) {
                 $("tasting-modal").classList.remove("active");
+                // Refresh tasting history if editing from within a coffee's history
+                if (editingCoffeeId) {
+                    const container = $("tastings-" + editingCoffeeId);
+                    const btn = container.previousElementSibling;
+                    container.style.display = "none";
+                    toggleTastingHistory(btn, editingCoffeeId);
+                }
+                editingTastingId = null;
+                editingCoffeeId = null;
                 loadCoffees();
             } else {
                 const err = await res.json();
@@ -907,6 +970,8 @@
         });
 
         // ── Tasting history ─────────────────────────────────────────────────
+
+        let tastingsCache = {};
 
         async function toggleTastingHistory(btn, coffeeId) {
             const container = $("tastings-" + coffeeId);
@@ -917,6 +982,7 @@
             }
             const res = await fetch("/api/tastings?coffee_id=" + coffeeId);
             const tastings = await res.json();
+            tastings.forEach(t => { tastingsCache[t.id] = t; });
             if (tastings.length === 0) {
                 container.innerHTML = '<div class="tasting-entry" style="color:#666">No tastings yet</div>';
             } else {
@@ -929,6 +995,7 @@
                         ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
                         ${t.tasting_notes ? `<div class="tasting-tags" style="margin-top:2px">${t.tasting_notes.split(",").map(n => n.trim()).filter(Boolean).map(n => `<span class="tasting-tag" onclick="event.stopPropagation(); filterByNote('${esc(n)}')">${esc(n)}</span>`).join("")}</div>` : ""}
                         ${t.comments ? `<div class="te-comments">"${esc(t.comments)}"</div>` : ""}
+                        <button class="delete-btn" style="margin-top:4px" onclick="editTasting(${t.id}, ${coffeeId})">edit</button>
                         <button class="delete-btn" style="margin-top:4px" onclick="deleteTasting(${t.id}, ${coffeeId})">delete</button>
                     </div>
                 `).join("");

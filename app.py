@@ -522,6 +522,34 @@ def save_tasting():
     return jsonify(tasting.to_dict()), 201
 
 
+@app.route("/api/tastings/<int:tasting_id>", methods=["PUT"])
+def update_tasting(tasting_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM tastings WHERE id = ?", (tasting_id,)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    existing = Tasting.from_row(row)
+    tasting = Tasting(
+        id=tasting_id,
+        coffee_id=existing.coffee_id,
+        brew_type=data.get("brew_type", existing.brew_type),
+        dosage=data.get("dosage", existing.dosage),
+        score=data.get("score", existing.score),
+        tasting_notes=data.get("tasting_notes", existing.tasting_notes),
+        comments=data.get("comments", existing.comments),
+        created_at=existing.created_at,
+    )
+    updates = tasting.to_row()
+    assignments = ", ".join(f"{k} = ?" for k in updates)
+    db.execute(f"UPDATE tastings SET {assignments} WHERE id = ?", [*updates.values(), tasting_id])
+    db.commit()
+    updated = db.execute("SELECT * FROM tastings WHERE id = ?", (tasting_id,)).fetchone()
+    db.close()
+    return jsonify(Tasting.from_row(updated).to_dict())
+
+
 @app.route("/api/tastings/<int:tasting_id>", methods=["DELETE"])
 def delete_tasting(tasting_id):
     db = get_db()
