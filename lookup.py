@@ -19,12 +19,14 @@ def _fetch_json(url: str) -> dict | list | None:
         return None
 
 
-def _fetch_html(url: str) -> str | None:
-    """Fetch a URL and return raw HTML."""
+def _fetch_html(url: str) -> tuple[str, str] | None:
+    """Fetch a URL and return (final_url, html) tuple."""
     try:
         req = Request(url, headers={"User-Agent": "CoffeeTracker/1.0"})
         with urlopen(req, timeout=10) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            final_url = resp.url
+            html = resp.read().decode("utf-8", errors="replace")
+            return (final_url, html)
     except Exception:
         return None
 
@@ -203,17 +205,28 @@ class ShopifySearcher(CoffeeSearcher):
 
 # ── WooCommerce Searcher ───────────────────────────────────────────────────
 
+_PRODUCT_TITLE_CLASSES = {
+    "jet-woo-builder-archive-product-title",
+    "woocommerce-loop-product__title",
+    "woocommerce-LoopProduct-link",
+}
+
+
 class _LinkExtractor(HTMLParser):
-    """Extract product links from WooCommerce search results."""
+    """Extract product links from WooCommerce search result title elements only."""
     def __init__(self):
         super().__init__()
         self.links: list[tuple[str, str]] = []  # (url, text)
+        self._in_title_container = 0
         self._current_link = None
         self._current_text = ""
 
     def handle_starttag(self, tag, attrs):
-        if tag == "a":
-            attrs_dict = dict(attrs)
+        attrs_dict = dict(attrs)
+        classes = set(attrs_dict.get("class", "").split())
+        if classes & _PRODUCT_TITLE_CLASSES:
+            self._in_title_container += 1
+        if tag == "a" and self._in_title_container > 0:
             href = attrs_dict.get("href", "")
             if "/product/" in href:
                 self._current_link = href
@@ -227,6 +240,8 @@ class _LinkExtractor(HTMLParser):
         if tag == "a" and self._current_link:
             self.links.append((self._current_link, self._current_text.strip()))
             self._current_link = None
+        if self._in_title_container > 0 and tag in ("div", "h2", "h3", "a", "span"):
+            self._in_title_container -= 1
 
 
 class _JsonLdExtractor(HTMLParser):
@@ -264,9 +279,13 @@ class WooCommerceSearcher(CoffeeSearcher):
     def search(self, coffee_name: str) -> str | None:
         """Search WooCommerce and return the best matching product URL."""
         url = f"{self.base_url}/?s={quote_plus(coffee_name)}&post_type=product"
-        html = _fetch_html(url)
-        if not html:
+        result = _fetch_html(url)
+        if not result:
             return None
+        final_url, html = result
+        # WooCommerce redirects single-result searches to the product page
+        if "/product/" in final_url:
+            return final_url
         extractor = _LinkExtractor()
         extractor.feed(html)
         if not extractor.links:
@@ -279,13 +298,16 @@ class WooCommerceSearcher(CoffeeSearcher):
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_url = link_url
+        if best_ratio < 0.3:
+            return None
         return best_url
 
     def fetch_product(self, product_url: str) -> dict | None:
         """Fetch a product page and extract JSON-LD Product entity."""
-        html = _fetch_html(product_url)
-        if not html:
+        result = _fetch_html(product_url)
+        if not result:
             return None
+        _, html = result
         extractor = _JsonLdExtractor()
         extractor.feed(html)
 
