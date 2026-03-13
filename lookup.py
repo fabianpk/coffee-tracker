@@ -19,6 +19,30 @@ def _fetch_json(url: str) -> dict | list | None:
         return None
 
 
+def _fetch_jsonrpc(url: str, method: str, params: list) -> dict | list | None:
+    """Send a JSON-RPC 2.0 request and return the result field."""
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": 1,
+    }).encode("utf-8")
+    try:
+        req = Request(
+            url,
+            data=payload,
+            headers={
+                "User-Agent": "CoffeeTracker/1.0",
+                "Content-Type": "application/json",
+            },
+        )
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            return data.get("result")
+    except Exception:
+        return None
+
+
 def _fetch_html(url: str) -> tuple[str, str] | None:
     """Fetch a URL and return (final_url, html) tuple."""
     try:
@@ -369,6 +393,99 @@ class WooCommerceSearcher(CoffeeSearcher):
         return result
 
 
+# ── Textalk/Abicart Searcher ───────────────────────────────────────────────
+
+
+class TextalkSearcher(CoffeeSearcher):
+    """Lookup provider for Textalk/Abicart-powered shops via JSON-RPC API."""
+
+    def __init__(self, base_url: str, webshop_id: int):
+        self.base_url = f"https://www.{base_url}" if not base_url.startswith("http") else base_url
+        self.api_url = f"{self.base_url}/backend/jsonrpc/v1/?webshop={webshop_id}"
+
+    def search(self, coffee_name: str) -> int | None:
+        """Search for an article and return the best matching UID."""
+        result = _fetch_jsonrpc(self.api_url, "Article.list", [
+            ["uid", "name"],
+            {
+                "filters": {"search": {"term": coffee_name, "relevance": 50}},
+                "limit": 10,
+            },
+        ])
+        if not result or not isinstance(result, list):
+            return None
+
+        query_lower = coffee_name.lower()
+        best_uid = None
+        best_ratio = 0.0
+        for article in result:
+            name = article.get("name", {})
+            title = name.get("sv") or name.get("en") or "" if isinstance(name, dict) else str(name)
+            ratio = SequenceMatcher(None, query_lower, title.lower()).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_uid = article.get("uid")
+
+        if best_ratio < 0.3:
+            return None
+        return best_uid
+
+    def fetch_product(self, uid: int) -> dict | None:
+        """Fetch article data by UID via Article.get."""
+        result = _fetch_jsonrpc(self.api_url, "Article.get", [
+            uid,
+            ["uid", "name", "price", "weight", "description", "introductionText", "url"],
+        ])
+        if not result or not isinstance(result, dict):
+            return None
+        return result
+
+    def extract(self, article: dict) -> dict:
+        """Extract coffee fields from a Textalk article dict."""
+        result = {}
+
+        name = article.get("name", {})
+        if isinstance(name, dict):
+            title = name.get("sv") or name.get("en") or ""
+        else:
+            title = str(name) if name else ""
+        if title:
+            result["name"] = title
+
+        price = article.get("price", {})
+        if isinstance(price, dict):
+            current = price.get("current", {})
+            if isinstance(current, dict):
+                sek = current.get("SEK")
+                if sek is not None:
+                    result["price"] = f"{sek} SEK"
+
+        weight = article.get("weight")
+        if weight:
+            # Weight is in grams in the Textalk API
+            try:
+                w = float(weight)
+                if w >= 1000:
+                    result["weight"] = f"{w / 1000:g} kg"
+                else:
+                    result["weight"] = f"{int(w)} g"
+            except (ValueError, TypeError):
+                result["weight"] = str(weight)
+
+        # Extract coffee-specific fields from description text
+        for field_key in ("description", "introductionText"):
+            raw = article.get(field_key, {})
+            text = raw.get("sv", "") if isinstance(raw, dict) else str(raw) if raw else ""
+            if text:
+                plain = _strip_html(text) if "<" in text else text
+                extracted = _extract_labeled_fields(plain)
+                for key, val in extracted.items():
+                    if val and key not in result:
+                        result[key] = val
+
+        return result
+
+
 # ── Provider Registry ───────────────────────────────────────────────────────
 
 PROVIDERS: dict[str, CoffeeSearcher] = {
@@ -386,6 +503,8 @@ PROVIDERS: dict[str, CoffeeSearcher] = {
     "kafferäven": ShopifySearcher(base_url="kafferaven.se"),
 }
 
+FALLBACK_PROVIDER = TextalkSearcher(base_url="baristashopen.se", webshop_id=4461)
+
 
 def _match_provider(roaster: str) -> CoffeeSearcher | None:
     """Match a roaster name to a provider using case-insensitive substring matching."""
@@ -400,17 +519,35 @@ def _match_provider(roaster: str) -> CoffeeSearcher | None:
 
 
 def has_provider(roaster: str) -> bool:
-    """Check if a lookup provider exists for the given roaster."""
-    return _match_provider(roaster) is not None
+    """Check if a lookup provider exists for the given roaster.
+
+    Always returns True for non-empty roaster names since the fallback
+    provider (baristashopen.se) is always available.
+    """
+    return bool(roaster and roaster.strip())
 
 
 def lookup_coffee(roaster: str, coffee_name: str) -> dict | None:
-    """Look up coffee details from a roastery website.
+    """Look up coffee details from a roastery website with fallback.
 
-    Returns a dict of CoffeeBean field names → values, or None if no provider
-    or coffee not found.
+    Tries the primary roastery provider first, then falls back to
+    baristashopen.se if no result is found or no provider exists.
+
+    Returns a dict of CoffeeBean field names → values (including a
+    ``_source`` key), or None if neither provider finds the coffee.
     """
+    # Try primary provider first
     provider = _match_provider(roaster)
-    if provider is None:
-        return None
-    return provider.lookup(coffee_name)
+    if provider is not None:
+        result = provider.lookup(coffee_name)
+        if result is not None:
+            result["_source"] = "roastery"
+            return result
+
+    # Fallback to baristashopen.se
+    result = FALLBACK_PROVIDER.lookup(coffee_name)
+    if result is not None:
+        result["_source"] = "baristashopen"
+        return result
+
+    return None

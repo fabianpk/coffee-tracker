@@ -338,7 +338,7 @@
         <button class="btn-rescan" id="form-scan-btn" type="button">Scan from Photo</button>
         <input type="file" id="camera-input" accept="image/*" style="display:none">
         <div class="field"><label>Roaster</label><div class="autocomplete-wrapper"><input id="f-roaster"><div class="autocomplete-dropdown" id="f-roaster-dropdown"></div></div></div>
-        <div class="field"><label>Coffee Name</label><div style="display:flex;gap:8px"><input id="f-name" style="flex:1"><button id="f-lookup-btn" type="button" style="display:none;padding:8px 14px;font-size:14px;font-weight:600;background:#5a3a1a;color:#d4a574;border:1px solid #7a5a3a;border-radius:8px;cursor:pointer;white-space:nowrap">Lookup</button></div></div>
+        <div class="field"><label>Coffee Name</label><div style="display:flex;gap:8px;align-items:center"><input id="f-name" style="flex:1"><button id="f-lookup-btn" type="button" style="display:none;padding:8px 14px;font-size:14px;font-weight:600;background:#5a3a1a;color:#d4a574;border:1px solid #7a5a3a;border-radius:8px;cursor:pointer;white-space:nowrap">Lookup</button></div><div id="lookup-source" style="display:none;font-size:12px;color:#a0a0a0;margin-top:4px"></div></div>
         <div class="field"><label>Country Grown</label><input id="f-country_grown"></div>
         <div class="field"><label>Country Roasted</label><input id="f-country_roasted"></div>
         <div class="field"><label>Bean Type</label><input id="f-bean_type" placeholder="e.g. Arabica, Bourbon, Robusta"></div>
@@ -450,6 +450,7 @@
             // Hide scan-specific UI and lookup button
             $("f-other-field").style.display = "none";
             $("f-lookup-btn").style.display = "none";
+            $("lookup-source").style.display = "none";
             $("qr-banner").style.display = "none";
             $("dedup-banner").style.display = "none";
             $("scan-spinner").style.display = "none";
@@ -1095,31 +1096,15 @@
 
         // ── Roastery lookup ───────────────────────────────────────────────────
 
-        let lookupAvailableTimeout = null;
-
-        function checkLookupAvailable() {
-            clearTimeout(lookupAvailableTimeout);
-            lookupAvailableTimeout = setTimeout(async () => {
-                const roaster = $("f-roaster").value.trim();
-                const btn = $("f-lookup-btn");
-                if (!roaster) { btn.style.display = "none"; return; }
-                try {
-                    const res = await fetch("/api/lookup/available?roaster=" + encodeURIComponent(roaster));
-                    const data = await res.json();
-                    btn.style.display = data.available ? "block" : "none";
-                } catch {
-                    btn.style.display = "none";
-                }
-            }, 300);
+        function updateLookupButton() {
+            const roaster = $("f-roaster").value.trim();
+            $("f-lookup-btn").style.display = roaster ? "block" : "none";
         }
 
-        $("f-roaster").addEventListener("input", checkLookupAvailable);
-        $("f-roaster").addEventListener("change", checkLookupAvailable);
-
-        // Also check after autocomplete selection (blur triggers after dropdown mousedown)
-        const origBlurHandler = $("f-roaster").onblur;
+        $("f-roaster").addEventListener("input", updateLookupButton);
+        $("f-roaster").addEventListener("change", updateLookupButton);
         $("f-roaster").addEventListener("blur", () => {
-            setTimeout(checkLookupAvailable, 200);
+            setTimeout(updateLookupButton, 200);
         });
 
         $("f-lookup-btn").addEventListener("click", async () => {
@@ -1130,9 +1115,11 @@
                 return;
             }
             const btn = $("f-lookup-btn");
+            const sourceEl = $("lookup-source");
             const origText = btn.textContent;
             btn.disabled = true;
             btn.textContent = "Looking up...";
+            sourceEl.style.display = "none";
             try {
                 const res = await fetch("/api/lookup", {
                     method: "POST",
@@ -1154,6 +1141,14 @@
                     if (data[key] && !$(id).value) {
                         $(id).value = data[key];
                     }
+                }
+                // Show source indication
+                if (data.source === "baristashopen") {
+                    sourceEl.textContent = "Found on Baristashopen.se";
+                    sourceEl.style.display = "block";
+                } else {
+                    sourceEl.textContent = "";
+                    sourceEl.style.display = "none";
                 }
             } catch (err) {
                 alert("Lookup error: " + err.message);

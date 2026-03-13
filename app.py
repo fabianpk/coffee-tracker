@@ -582,11 +582,12 @@ def api_lookup():
     coffee_name = data.get("coffee_name", "").strip()
     if not roaster or not coffee_name:
         return jsonify({"error": "roaster and coffee_name are required"}), 400
-    if not has_provider(roaster):
-        return jsonify({"error": "No lookup provider for this roaster"}), 404
     result = lookup_coffee(roaster, coffee_name)
     if not result:
         return jsonify({"error": "Coffee not found"}), 404
+    # Move internal _source key to public source field
+    source = result.pop("_source", "roastery")
+    result["source"] = source
     return jsonify(result)
 
 
