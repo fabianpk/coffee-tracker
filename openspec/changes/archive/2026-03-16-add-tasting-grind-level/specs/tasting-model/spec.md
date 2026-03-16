@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Tasting dataclass definition
 The system SHALL provide a `Tasting` dataclass in `models.py` with the following properties:
 
@@ -25,31 +27,12 @@ The system SHALL provide a `Tasting` dataclass in `models.py` with the following
 - **WHEN** a `Tasting` is instantiated with only `coffee_id` and `created_at`
 - **THEN** all other optional fields SHALL default to `None`, including `grind_level`
 
-### Requirement: Tasting database serialization
-The `Tasting` class SHALL provide methods to convert to and from database rows.
-
-- `to_row()` SHALL return a dict of column names to values suitable for SQL INSERT.
-- `from_row(row)` SHALL be a classmethod that accepts a `sqlite3.Row` and returns a `Tasting` instance.
-- `to_dict()` SHALL return a dict suitable for JSON serialization.
-
-#### Scenario: Round-trip through to_row and from_row
-- **WHEN** a `Tasting` is converted via `to_row()`, inserted into the database, read back as a `sqlite3.Row`, and converted via `Tasting.from_row(row)`
-- **THEN** the resulting `Tasting` SHALL have identical property values to the original (except `id`, which is assigned by the database)
-
-#### Scenario: to_dict produces JSON-safe output
-- **WHEN** `to_dict()` is called on a `Tasting`
-- **THEN** the result SHALL be a plain dict with string keys and all values SHALL be JSON-serializable
-
 ### Requirement: tastings database table
 The SQLite database SHALL have a `tastings` table with columns: `id` (PK), `coffee_id` (INTEGER NOT NULL, FK to `coffees.id`), `brew_type`, `dosage`, `grind_level` (REAL), `score`, `tasting_notes`, `comments`, `created_at`.
 
 #### Scenario: Fresh database initialization
 - **WHEN** the app starts with no existing `coffees.db`
 - **THEN** both the `coffees` table and the `tastings` table SHALL be created with all columns including `grind_level`
-
-#### Scenario: Existing database without tastings table
-- **WHEN** the app starts with an existing `coffees.db` that has no `tastings` table
-- **THEN** `init_db()` SHALL create the `tastings` table without modifying the `coffees` table
 
 #### Scenario: Existing database without grind_level column
 - **WHEN** the app starts with an existing `tastings` table missing the `grind_level` column
