@@ -316,6 +316,67 @@
         }
         .tasting-entry .te-score { color: #8B5E3C; font-weight: 600; }
         .tasting-entry .te-comments { color: #999; font-style: italic; margin-top: 2px; }
+
+        /* Recent tastings section */
+        .recent-tasting-card {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin: 6px 0;
+        }
+        .recent-tasting-card .rt-coffee {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .recent-tasting-card .rt-details {
+            font-size: 14px;
+            color: #ccc;
+            margin-top: 2px;
+        }
+        .recent-tasting-card .rt-score { color: #8B5E3C; font-weight: 600; }
+        .recent-tasting-card .rt-date { font-size: 12px; color: #666; margin-top: 2px; }
+
+        /* Roastery grid */
+        .roastery-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .roastery-btn {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 12px;
+            padding: 14px 10px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #e0e0e0;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.15s;
+        }
+        .roastery-btn:active { background: #3a3a3a; }
+        .roastery-btn .roastery-emoji { font-size: 22px; display: block; margin-bottom: 4px; }
+
+        /* Roastery detail view */
+        .roastery-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .roastery-back-btn {
+            background: none;
+            border: none;
+            color: #8B5E3C;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+        }
+        .roastery-detail-header h2 { margin: 0; font-size: 18px; }
     </style>
 </head>
 <body>
@@ -434,12 +495,23 @@
         </div>
     </div>
 
-    <h2>My Coffees</h2>
-    <div id="filter-bar" class="filter-bar" style="display:none">
-        <span>Filtering by: <strong id="filter-note-name"></strong></span>
-        <button id="clear-filter-btn" aria-label="Clear filter">&times;</button>
+    <div id="home-view">
+        <div id="recent-tastings-section"></div>
+        <h2>My Roasteries</h2>
+        <div id="roastery-grid" class="roastery-grid"><p class="empty">No coffees yet. Add your first coffee!</p></div>
     </div>
-    <div id="coffee-list"><p class="empty">No coffees yet. Add your first coffee!</p></div>
+
+    <div id="roastery-detail-view" style="display:none">
+        <div class="roastery-detail-header">
+            <button class="roastery-back-btn" id="roastery-back-btn">←</button>
+            <h2 id="roastery-detail-title"></h2>
+        </div>
+        <div id="filter-bar" class="filter-bar" style="display:none">
+            <span>Filtering by: <strong id="filter-note-name"></strong></span>
+            <button id="clear-filter-btn" aria-label="Clear filter">&times;</button>
+        </div>
+        <div id="roastery-coffee-list"></div>
+    </div>
 
     <script>
         const $ = id => document.getElementById(id);
@@ -597,8 +669,7 @@
                 body: JSON.stringify(getFormCoffee()),
             });
             closeReviewForm();
-            loadCoffees();
-            loadRoasters();
+            loadHomeScreen();
         });
 
         $("update-existing-btn").addEventListener("click", async () => {
@@ -611,8 +682,7 @@
             });
             if (res.ok) {
                 closeReviewForm();
-                loadCoffees();
-                loadRoasters();
+                loadHomeScreen();
             } else {
                 alert("Update failed");
             }
@@ -631,8 +701,7 @@
                 body: JSON.stringify(getFormCoffee()),
             });
             closeReviewForm();
-            loadCoffees();
-            loadRoasters();
+            loadHomeScreen();
         });
 
         // ── Detail panel ──────────────────────────────────────────────────────
@@ -681,8 +750,7 @@
             if (res.ok) {
                 $("detail-panel").classList.remove("active");
                 detailCoffeeId = null;
-                loadCoffees();
-                loadRoasters();
+                loadHomeScreen();
             } else {
                 alert("Save failed");
             }
@@ -693,7 +761,11 @@
             await fetch("/api/coffees/" + detailCoffeeId, { method: "DELETE" });
             $("detail-panel").classList.remove("active");
             detailCoffeeId = null;
-            loadCoffees();
+            if (currentRoastery) {
+                openRoastery(currentRoastery);
+            } else {
+                loadHomeScreen();
+            }
         });
 
         // ── Rescan ────────────────────────────────────────────────────────────
@@ -734,12 +806,16 @@
             }
         });
 
-        // ── List ──────────────────────────────────────────────────────────────
+        // ── List & Home Screen ───────────────────────────────────────────────
 
         async function deleteCoffee(id) {
             if (!confirm("Delete this coffee and all its tastings?")) return;
             await fetch("/api/coffees/" + id, { method: "DELETE" });
-            loadCoffees();
+            if (currentRoastery) {
+                openRoastery(currentRoastery);
+            } else {
+                loadHomeScreen();
+            }
         }
 
         function renderAvgScore(c) {
@@ -749,36 +825,113 @@
 
         let coffeeCache = [];
         let activeNoteFilter = null;
+        let currentRoastery = null;
 
         function filterByNote(note) {
             activeNoteFilter = note;
             $("filter-note-name").textContent = note;
             $("filter-bar").style.display = "flex";
-            loadCoffees();
+            if (currentRoastery) {
+                openRoastery(currentRoastery);
+            }
         }
 
         $("clear-filter-btn").addEventListener("click", () => {
             activeNoteFilter = null;
             $("filter-bar").style.display = "none";
-            loadCoffees();
+            if (currentRoastery) {
+                openRoastery(currentRoastery);
+            }
         });
 
-        async function loadCoffees() {
+        async function loadHomeScreen() {
+            // Fetch recent tastings and roasters in parallel
+            const [recentRes, roastersRes, coffeesRes] = await Promise.all([
+                fetch("/api/tastings/recent?limit=2"),
+                fetch("/api/roasters"),
+                fetch("/api/coffees"),
+            ]);
+            const recentTastings = await recentRes.json();
+            const roasters = await roastersRes.json();
+            coffeeCache = await coffeesRes.json();
+
+            // Show home view, hide roastery detail
+            $("home-view").style.display = "block";
+            $("roastery-detail-view").style.display = "none";
+            currentRoastery = null;
+
+            // Render recent tastings
+            const rtSection = $("recent-tastings-section");
+            if (recentTastings.length > 0) {
+                rtSection.innerHTML = `<h2>Recent Tastings</h2>` + recentTastings.map(t => `
+                    <div class="recent-tasting-card">
+                        <div class="rt-coffee">${esc(t.coffee_roaster || "Unknown")} — ${esc(t.coffee_name || "Unknown")}</div>
+                        <div class="rt-details">
+                            ${brewTypeDisplay(t.brew_type)}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}${t.grind_level != null ? " · grind " + t.grind_level.toFixed(1) : ""}
+                        </div>
+                        ${t.score != null ? `<div class="rt-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
+                        ${t.tasting_notes ? `<div class="tasting-tags" style="margin-top:2px">${t.tasting_notes.split(",").map(n => n.trim()).filter(Boolean).map(n => `<span class="tasting-tag">${esc(n)}</span>`).join("")}</div>` : ""}
+                        <div class="rt-date">${new Date(t.created_at).toLocaleDateString()}</div>
+                    </div>
+                `).join("");
+            } else {
+                rtSection.innerHTML = "";
+            }
+
+            // Render roastery grid
+            const grid = $("roastery-grid");
+            if (roasters.length === 0) {
+                grid.innerHTML = '<p class="empty">No coffees yet. Add your first coffee!</p>';
+            } else {
+                grid.innerHTML = roasters.map(r => `
+                    <button class="roastery-btn" data-roaster="${esc(r.roaster)}">
+                        <span class="roastery-emoji">${r.emoji || "☕"}</span>
+                        ${esc(r.roaster)}
+                    </button>
+                `).join("");
+                grid.querySelectorAll(".roastery-btn").forEach(btn => {
+                    btn.addEventListener("click", () => openRoastery(btn.dataset.roaster));
+                });
+            }
+        }
+
+        async function openRoastery(roasterName) {
+            currentRoastery = roasterName;
+            $("home-view").style.display = "none";
+            $("roastery-detail-view").style.display = "block";
+
+            // Find roaster emoji from cache or use fallback
+            const roasterEmoji = roasterCache.find(r => r.roaster === roasterName)?.emoji || "☕";
+            $("roastery-detail-title").textContent = roasterEmoji + " " + roasterName;
+
+            // Fetch coffees for this roaster
             const url = activeNoteFilter
                 ? "/api/coffees?note=" + encodeURIComponent(activeNoteFilter)
                 : "/api/coffees";
             const res = await fetch(url);
-            coffeeCache = await res.json();
-            const list = $("coffee-list");
+            const allCoffees = await res.json();
+            coffeeCache = allCoffees;
+            const roasteryCoffees = allCoffees.filter(c =>
+                (c.roaster || "").toLowerCase() === roasterName.toLowerCase()
+            );
 
-            if (coffeeCache.length === 0) {
-                list.innerHTML = '<p class="empty">No coffees yet. Add your first coffee!</p>';
+            const list = $("roastery-coffee-list");
+            if (roasteryCoffees.length === 0) {
+                list.innerHTML = '<p class="empty">No coffees match.</p>';
                 return;
             }
 
-            list.innerHTML = coffeeCache.map(c => `
+            // Fetch all tastings for these coffees in parallel
+            const tastingPromises = roasteryCoffees.map(c =>
+                fetch("/api/tastings?coffee_id=" + c.id).then(r => r.json())
+            );
+            const allTastings = await Promise.all(tastingPromises);
+
+            list.innerHTML = roasteryCoffees.map((c, idx) => {
+                const tastings = allTastings[idx];
+                tastings.forEach(t => { tastingsCache[t.id] = t; });
+                return `
                 <div class="coffee-item" data-id="${c.id}">
-                    <div class="roastery">${esc(c.roaster || "Unknown roaster")}</div>
                     <div class="name">${esc(c.name || "Unknown coffee")}</div>
                     ${c.country_grown ? `<div class="origin">${esc(c.country_grown)}</div>` : ""}
                     ${c.bean_type ? `<div style="font-size:13px;color:#aaa;margin-top:2px">${esc(c.bean_type)}</div>` : ""}
@@ -790,11 +943,28 @@
                         <button class="delete-btn" onclick="event.stopPropagation(); deleteCoffee(${c.id})">delete</button>
                     </div>
                     ${c.comments ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.comments)}"</div>` : ""}
-                    <button class="tasting-toggle" onclick="event.stopPropagation(); toggleTastingHistory(this, ${c.id})">Show tastings</button>
-                    <div class="tasting-history" id="tastings-${c.id}" style="display:none"></div>
+                    <div class="tasting-history" style="display:block;margin-top:8px">
+                        ${tastings.length === 0
+                            ? '<div class="tasting-entry" style="color:#666">No tastings yet</div>'
+                            : tastings.map(t => `
+                                <div class="tasting-entry">
+                                    <div class="te-header">
+                                        <span>${brewTypeDisplay(t.brew_type)}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}${t.grind_level != null ? " · grind " + t.grind_level.toFixed(1) : ""}</span>
+                                        <span>${new Date(t.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
+                                    ${t.tasting_notes ? `<div class="tasting-tags" style="margin-top:2px">${t.tasting_notes.split(",").map(n => n.trim()).filter(Boolean).map(n => `<span class="tasting-tag" onclick="event.stopPropagation(); filterByNote('${esc(n)}')">${esc(n)}</span>`).join("")}</div>` : ""}
+                                    ${t.comments ? `<div class="te-comments">"${esc(t.comments)}"</div>` : ""}
+                                    <button class="delete-btn" style="margin-top:4px" onclick="event.stopPropagation(); editTasting(${t.id}, ${c.id})">edit</button>
+                                    <button class="delete-btn" style="margin-top:4px" onclick="event.stopPropagation(); deleteTasting(${t.id}, ${c.id})">delete</button>
+                                </div>
+                            `).join("")
+                        }
+                    </div>
                 </div>
-            `).join("");
+            `}).join("");
 
+            // Wire coffee card taps to detail panel
             list.querySelectorAll(".coffee-item").forEach(el => {
                 el.addEventListener("click", () => {
                     const coffee = coffeeCache.find(c => c.id === parseInt(el.dataset.id));
@@ -802,6 +972,14 @@
                 });
             });
         }
+
+        $("roastery-back-btn").addEventListener("click", () => {
+            activeNoteFilter = null;
+            $("filter-bar").style.display = "none";
+            currentRoastery = null;
+            $("roastery-detail-view").style.display = "none";
+            $("home-view").style.display = "block";
+        });
 
         // ── Tasting modal ────────────────────────────────────────────────────
 
@@ -1021,16 +1199,13 @@
             });
             if (res.ok) {
                 $("tasting-modal").classList.remove("active");
-                // Refresh tasting history if editing from within a coffee's history
-                if (editingCoffeeId) {
-                    const container = $("tastings-" + editingCoffeeId);
-                    const btn = container.previousElementSibling;
-                    container.style.display = "none";
-                    toggleTastingHistory(btn, editingCoffeeId);
-                }
                 editingTastingId = null;
                 editingCoffeeId = null;
-                loadCoffees();
+                if (currentRoastery) {
+                    openRoastery(currentRoastery);
+                } else {
+                    loadHomeScreen();
+                }
             } else {
                 const err = await res.json();
                 alert("Error: " + (err.error || "Save failed"));
@@ -1075,12 +1250,11 @@
         async function deleteTasting(tastingId, coffeeId) {
             if (!confirm("Delete this tasting?")) return;
             await fetch("/api/tastings/" + tastingId, { method: "DELETE" });
-            // Refresh the tasting history for this coffee
-            const btn = document.querySelector(`#tastings-${coffeeId}`).previousElementSibling;
-            const container = $("tastings-" + coffeeId);
-            container.style.display = "none";
-            toggleTastingHistory(btn, coffeeId);
-            loadCoffees();
+            if (currentRoastery) {
+                openRoastery(currentRoastery);
+            } else {
+                loadHomeScreen();
+            }
         }
 
         function esc(s) {
@@ -1100,6 +1274,10 @@
             } catch (e) { /* ignore */ }
         }
 
+        function roasterNames() {
+            return roasterCache.map(r => typeof r === "string" ? r : r.roaster);
+        }
+
         function setupAutocomplete(inputId, dropdownId) {
             const input = $(inputId);
             const dropdown = $(dropdownId);
@@ -1116,7 +1294,7 @@
             function getMatches() {
                 const q = input.value.trim().toLowerCase();
                 if (!q) return [];
-                return roasterCache.filter(r => r.toLowerCase().startsWith(q));
+                return roasterNames().filter(r => r.toLowerCase().startsWith(q));
             }
 
             input.addEventListener("input", () => {
@@ -1225,7 +1403,7 @@
             }
         });
 
-        loadCoffees();
+        loadHomeScreen();
         loadRoasters();
     </script>
 </body>

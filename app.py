@@ -86,6 +86,12 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS roastery_emojis (
+            roaster TEXT UNIQUE,
+            emoji TEXT
+        )
+    """)
     # Migrate old schema if needed
     columns = {row[1] for row in db.execute("PRAGMA table_info(coffees)").fetchall()}
     migrations = {
@@ -314,6 +320,71 @@ def match_roaster(scanned_name: str, db) -> str | None:
     return best_match
 
 
+def generate_roastery_emoji(roaster_name: str) -> str:
+    """Call Claude Haiku to generate a single emoji for a roastery name."""
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=10,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Pick a single emoji that best represents a coffee roastery called \"{roaster_name}\". "
+                    "Consider the name's meaning, origin, or character. "
+                    "Respond with ONLY the emoji, nothing else."
+                ),
+            }],
+        )
+        emoji = message.content[0].text.strip()
+        # Ensure we got something reasonable (single emoji-like response)
+        if len(emoji) <= 4 and emoji:
+            return emoji
+        return "☕"
+    except Exception as e:
+        app.logger.warning(f"Emoji generation failed for {roaster_name}: {e}")
+        return "☕"
+
+
+def generate_roastery_emojis_batch(roaster_names: list[str]) -> dict[str, str]:
+    """Generate emojis for multiple roasteries in a single API call."""
+    if not roaster_names:
+        return {}
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY_FOR_LOOKUP"))
+        names_list = ", ".join(f'"{n}"' for n in roaster_names)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"For each coffee roastery name, pick a single emoji that represents it. "
+                    f"Consider each name's meaning, origin, or character. "
+                    f"Roasteries: {names_list}\n"
+                    f"Respond with ONLY valid JSON mapping name to emoji, e.g. "
+                    f'{{"Name": "🔥"}}. No markdown, no explanation.'
+                ),
+            }],
+        )
+        text = message.content[0].text.strip()
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        result = json.loads(text)
+        # Validate and fill missing
+        final = {}
+        for name in roaster_names:
+            emoji = result.get(name, "☕")
+            final[name] = emoji if len(emoji) <= 4 and emoji else "☕"
+        return final
+    except Exception as e:
+        app.logger.warning(f"Batch emoji generation failed: {e}")
+        return {name: "☕" for name in roaster_names}
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -413,15 +484,33 @@ def list_tasting_notes():
 
 @app.route("/api/roasters", methods=["GET"])
 def list_roasters():
-    """Return distinct roaster names, optionally filtered by prefix."""
+    """Return distinct roaster names with emojis, optionally filtered by prefix."""
     db = get_db()
     rows = db.execute("SELECT DISTINCT roaster FROM coffees WHERE roaster IS NOT NULL AND roaster != ''").fetchall()
-    db.close()
-    roasters = sorted([r["roaster"] for r in rows], key=str.lower)
+    roaster_names = sorted([r["roaster"] for r in rows], key=str.lower)
     q = request.args.get("q", "").strip().lower()
     if q:
-        roasters = [r for r in roasters if r.lower().startswith(q)]
-    return jsonify(roasters)
+        roaster_names = [r for r in roaster_names if r.lower().startswith(q)]
+
+    # Fetch cached emojis
+    emoji_rows = db.execute("SELECT roaster, emoji FROM roastery_emojis").fetchall()
+    emoji_map = {r["roaster"]: r["emoji"] for r in emoji_rows}
+
+    # Generate missing emojis in batch
+    missing = [r for r in roaster_names if r not in emoji_map]
+    if missing:
+        new_emojis = generate_roastery_emojis_batch(missing)
+        for name, emoji in new_emojis.items():
+            db.execute(
+                "INSERT OR REPLACE INTO roastery_emojis (roaster, emoji) VALUES (?, ?)",
+                (name, emoji),
+            )
+            emoji_map[name] = emoji
+        db.commit()
+
+    db.close()
+    result = [{"roaster": r, "emoji": emoji_map.get(r, "☕")} for r in roaster_names]
+    return jsonify(result)
 
 
 @app.route("/api/coffees", methods=["POST"])
@@ -446,6 +535,19 @@ def save_coffee():
     db = get_db()
     db.execute(f"INSERT INTO coffees ({columns}) VALUES ({placeholders})", list(row.values()))
     db.commit()
+    # Generate emoji for roaster if not already cached
+    roaster = data.get("roaster", "").strip()
+    if roaster:
+        existing = db.execute(
+            "SELECT emoji FROM roastery_emojis WHERE roaster = ?", (roaster,)
+        ).fetchone()
+        if not existing:
+            emoji = generate_roastery_emoji(roaster)
+            db.execute(
+                "INSERT OR REPLACE INTO roastery_emojis (roaster, emoji) VALUES (?, ?)",
+                (roaster, emoji),
+            )
+            db.commit()
     db.close()
     return jsonify({"status": "saved"}), 201
 
@@ -568,6 +670,28 @@ def delete_tasting(tasting_id):
     db.commit()
     db.close()
     return jsonify({"status": "deleted"})
+
+
+@app.route("/api/tastings/recent", methods=["GET"])
+def recent_tastings():
+    limit = request.args.get("limit", 2, type=int)
+    db = get_db()
+    rows = db.execute(
+        """SELECT t.*, c.name AS coffee_name, c.roaster AS coffee_roaster
+           FROM tastings t
+           JOIN coffees c ON t.coffee_id = c.id
+           ORDER BY t.created_at DESC
+           LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    db.close()
+    result = []
+    for r in rows:
+        t = Tasting.from_row(r).to_dict()
+        t["coffee_name"] = r["coffee_name"]
+        t["coffee_roaster"] = r["coffee_roaster"]
+        result.append(t)
+    return jsonify(result)
 
 
 @app.route("/api/tastings", methods=["GET"])
