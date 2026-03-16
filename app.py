@@ -79,6 +79,7 @@ def init_db():
             coffee_id INTEGER NOT NULL REFERENCES coffees(id),
             brew_type TEXT,
             dosage REAL,
+            grind_level REAL,
             score INTEGER,
             tasting_notes TEXT,
             comments TEXT,
@@ -102,6 +103,10 @@ def init_db():
     # Migrate rating → brew_score
     if "rating" in columns and "brew_score" in migrations:
         db.execute("UPDATE coffees SET brew_score = rating WHERE brew_score IS NULL AND rating IS NOT NULL")
+    # Migrate tastings table: add grind_level if missing
+    tasting_columns = {row[1] for row in db.execute("PRAGMA table_info(tastings)").fetchall()}
+    if "grind_level" not in tasting_columns:
+        db.execute("ALTER TABLE tastings ADD COLUMN grind_level REAL")
     db.commit()
     db.close()
 
@@ -508,6 +513,7 @@ def save_tasting():
         coffee_id=coffee_id,
         brew_type=data.get("brew_type"),
         dosage=data.get("dosage"),
+        grind_level=data.get("grind_level"),
         score=data.get("score"),
         tasting_notes=data.get("tasting_notes"),
         comments=data.get("comments"),
@@ -536,6 +542,7 @@ def update_tasting(tasting_id):
         coffee_id=existing.coffee_id,
         brew_type=data.get("brew_type", existing.brew_type),
         dosage=data.get("dosage", existing.dosage),
+        grind_level=data.get("grind_level", existing.grind_level),
         score=data.get("score", existing.score),
         tasting_notes=data.get("tasting_notes", existing.tasting_notes),
         comments=data.get("comments", existing.comments),

@@ -61,6 +61,7 @@ class Tasting:
     coffee_id: int = 0
     brew_type: str | None = None
     dosage: float | None = None
+    grind_level: float | None = None
     score: int | None = None
     tasting_notes: str | None = None
     comments: str | None = None

@@ -410,6 +410,12 @@
                 </select>
             </div>
             <div class="field">
+                <label>Grind Level</label>
+                <select id="t-grind-level" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
+                    <option value="">Select grind level...</option>
+                </select>
+            </div>
+            <div class="field">
                 <label>Score</label>
                 <div class="rating" id="t-score-buttons">
                     <button data-val="1">1</button>
@@ -811,10 +817,19 @@
             return bt ? bt.emoji + " " + bt.label : (key || "–");
         }
 
+        const GRIND_DEFAULTS = {
+            espresso: 4.0,
+            brew: 14.0,
+            metal_brew: 18.0,
+            cappuccino: 4.0,
+        };
+
         let selectedBrewType = null;
         let selectedTastingScore = null;
         let editingTastingId = null;
         let editingCoffeeId = null;
+        let grindManuallyChanged = false;
+        let lastCoffeeGrindLevel = null;
 
         function editTasting(tastingId, coffeeId) {
             const t = tastingsCache[tastingId];
@@ -841,6 +856,11 @@
 
             // Pre-populate dosage
             $("t-dosage").value = t.dosage != null ? t.dosage : "";
+
+            // Pre-populate grind level
+            $("t-grind-level").value = t.grind_level != null ? t.grind_level : "";
+            grindManuallyChanged = false;
+            lastCoffeeGrindLevel = t.grind_level;
 
             // Pre-populate score
             selectedTastingScore = t.score != null ? t.score : null;
@@ -880,6 +900,44 @@
             }
         })();
 
+        // Populate grind level dropdown (3.0 to 22.0 in 0.2 increments)
+        (function() {
+            const sel = $("t-grind-level");
+            for (let g = 3.0; g <= 22.0; g = Math.round((g + 0.2) * 10) / 10) {
+                const opt = document.createElement("option");
+                opt.value = g;
+                opt.textContent = g.toFixed(1);
+                sel.appendChild(opt);
+            }
+        })();
+
+        // Track manual grind level changes
+        $("t-grind-level").addEventListener("change", () => {
+            grindManuallyChanged = true;
+        });
+
+        // Smart grind default: fetch last grind level when coffee is selected
+        $("t-coffee").addEventListener("change", async () => {
+            const coffeeId = $("t-coffee").value;
+            lastCoffeeGrindLevel = null;
+            if (coffeeId) {
+                const res = await fetch("/api/tastings?coffee_id=" + coffeeId);
+                const tastings = await res.json();
+                const withGrind = tastings.find(t => t.grind_level != null);
+                if (withGrind) {
+                    lastCoffeeGrindLevel = withGrind.grind_level;
+                    $("t-grind-level").value = withGrind.grind_level;
+                    grindManuallyChanged = false;
+                    return;
+                }
+            }
+            // No prior grind level — use brew-type default if a brew type is selected
+            if (selectedBrewType && GRIND_DEFAULTS[selectedBrewType] != null) {
+                $("t-grind-level").value = GRIND_DEFAULTS[selectedBrewType];
+            }
+            grindManuallyChanged = false;
+        });
+
         $("tasting-btn").addEventListener("click", async () => {
             // Reset edit state
             editingTastingId = null;
@@ -904,6 +962,9 @@
             $("t-brew-type-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("t-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
             $("t-dosage").value = "";
+            $("t-grind-level").value = "";
+            grindManuallyChanged = false;
+            lastCoffeeGrindLevel = null;
             $("t-tasting_notes").value = "";
             $("t-comments").value = "";
             $("tasting-modal").classList.add("active");
@@ -915,6 +976,10 @@
                 $("t-brew-type-buttons").querySelectorAll("button").forEach(b =>
                     b.classList.toggle("active", b.dataset.val === selectedBrewType)
                 );
+                // Set grind default if user hasn't manually changed it and no prior grind level
+                if (!grindManuallyChanged && lastCoffeeGrindLevel == null && GRIND_DEFAULTS[selectedBrewType] != null) {
+                    $("t-grind-level").value = GRIND_DEFAULTS[selectedBrewType];
+                }
             }
         });
 
@@ -935,10 +1000,12 @@
             const coffeeId = $("t-coffee").value;
             if (!coffeeId) { alert("Please select a coffee"); return; }
             const dosageVal = $("t-dosage").value;
+            const grindVal = $("t-grind-level").value;
             const tasting = {
                 coffee_id: parseInt(coffeeId),
                 brew_type: selectedBrewType,
                 dosage: dosageVal ? parseFloat(dosageVal) : null,
+                grind_level: grindVal ? parseFloat(grindVal) : null,
                 score: selectedTastingScore,
                 tasting_notes: $("t-tasting_notes").value || null,
                 comments: $("t-comments").value || null,
@@ -990,7 +1057,7 @@
                 container.innerHTML = tastings.map(t => `
                     <div class="tasting-entry">
                         <div class="te-header">
-                            <span>${brewTypeDisplay(t.brew_type)}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}</span>
+                            <span>${brewTypeDisplay(t.brew_type)}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}${t.grind_level != null ? " · grind " + t.grind_level.toFixed(1) : ""}</span>
                             <span>${new Date(t.created_at).toLocaleDateString()}</span>
                         </div>
                         ${t.score != null ? `<div class="te-score">${"★".repeat(t.score)}${"☆".repeat(5 - t.score)}</div>` : ""}
