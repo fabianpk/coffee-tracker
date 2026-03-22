@@ -337,6 +337,22 @@
         }
         .recent-tasting-card .rt-score { color: #8B5E3C; font-weight: 600; }
         .recent-tasting-card .rt-date { font-size: 12px; color: #666; margin-top: 2px; }
+        .recent-tasting-card .rt-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rt-new-tasting-btn, .new-tasting-btn {
+            background: #3a3a3a;
+            color: #8B5E3C;
+            border: 1px solid #555;
+            border-radius: 6px;
+            font-size: 11px;
+            padding: 3px 8px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .new-tasting-btn { font-size: 12px; padding: 4px 10px; margin-top: 6px; }
 
         /* Roastery grid */
         .roastery-grid {
@@ -865,7 +881,10 @@
             if (recentTastings.length > 0) {
                 rtSection.innerHTML = `<h2>Recent Tastings</h2>` + recentTastings.map(t => `
                     <div class="recent-tasting-card">
-                        <div class="rt-coffee">${esc(t.coffee_roaster || "Unknown")} — ${esc(t.coffee_name || "Unknown")}</div>
+                        <div class="rt-top">
+                            <div class="rt-coffee">${esc(t.coffee_roaster || "Unknown")} — ${esc(t.coffee_name || "Unknown")}</div>
+                            <button class="rt-new-tasting-btn" onclick="event.stopPropagation(); openNewTastingFor(${t.coffee_id})">New Tasting</button>
+                        </div>
                         <div class="rt-details">
                             ${brewTypeDisplay(t.brew_type)}${t.dosage != null ? " · " + t.dosage.toFixed(1) + "gr" : ""}${t.grind_level != null ? " · grind " + t.grind_level.toFixed(1) : ""}
                         </div>
@@ -943,6 +962,7 @@
                         <button class="delete-btn" onclick="event.stopPropagation(); deleteCoffee(${c.id})">delete</button>
                     </div>
                     ${c.comments ? `<div style="margin-top:6px;font-size:13px;color:#999;font-style:italic">"${esc(c.comments)}"</div>` : ""}
+                    <button class="new-tasting-btn" onclick="event.stopPropagation(); openNewTastingFor(${c.id})">New Tasting</button>
                     <div class="tasting-history" style="display:block;margin-top:8px">
                         ${tastings.length === 0
                             ? '<div class="tasting-entry" style="color:#666">No tastings yet</div>'
@@ -1115,6 +1135,37 @@
             }
             grindManuallyChanged = false;
         });
+
+        async function openNewTastingFor(coffeeId) {
+            editingTastingId = null;
+            editingCoffeeId = null;
+            $("tasting-modal-title").textContent = "Conduct Tasting";
+            $("tasting-save-btn").textContent = "Save Tasting";
+            const sel = $("t-coffee");
+            sel.disabled = false;
+            sel.innerHTML = '<option value="">Select a coffee...</option>';
+            const res = await fetch("/api/coffees");
+            const coffees = await res.json();
+            coffees.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.id;
+                opt.textContent = (c.roaster || "Unknown") + " - " + (c.name || "Unknown");
+                sel.appendChild(opt);
+            });
+            sel.value = coffeeId;
+            selectedBrewType = null;
+            selectedTastingScore = null;
+            $("t-brew-type-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            $("t-score-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            $("t-dosage").value = "";
+            $("t-grind-level").value = "";
+            grindManuallyChanged = false;
+            lastCoffeeGrindLevel = null;
+            $("t-tasting_notes").value = "";
+            $("t-comments").value = "";
+            sel.dispatchEvent(new Event("change"));
+            $("tasting-modal").classList.add("active");
+        }
 
         $("tasting-btn").addEventListener("click", async () => {
             // Reset edit state
