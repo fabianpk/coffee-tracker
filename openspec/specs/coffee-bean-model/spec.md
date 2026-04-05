@@ -1,3 +1,8 @@
+## Purpose
+Define the CoffeeBean dataclass, its serialization methods, scan mapping, and integration with API routes and the Claude vision prompt.
+
+## Requirements
+
 ### Requirement: CoffeeBean dataclass definition
 The system SHALL provide a `CoffeeBean` dataclass in `models.py` with the following properties, all optional (nullable) except `id` and `created_at`:
 
@@ -100,8 +105,8 @@ The Claude vision prompt SHALL NOT request `origin`. The prompt SHALL request `c
 - **THEN** the scan result SHALL include `bean_type` with value `null`
 
 #### Scenario: Tasting notes returned as comma-separated list
-- **WHEN** a coffee bag with tasting notes "Björnbär / Röd Grapefrukt / Tranbär" is scanned
-- **THEN** the scan result SHALL return tasting_notes as "Björnbär, Röd Grapefrukt, Tranbär" (comma-separated, preserving original language)
+- **WHEN** a coffee bag with tasting notes "Bjornbar / Rod Grapefrukt / Tranbar" is scanned
+- **THEN** the scan result SHALL return tasting_notes as "Bjornbar, Rod Grapefrukt, Tranbar" (comma-separated, preserving original language)
 
 ### Requirement: Database schema includes bean_type
 The `coffees` table SHALL include a `bean_type TEXT` column. The `init_db()` migration SHALL add this column to existing databases that lack it.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Provide a lookup system that searches roastery websites for coffee details using platform-specific providers (Shopify, WooCommerce).
+
+## Requirements
 
 ### Requirement: Lookup API endpoint
 The system SHALL expose a `POST /api/lookup` endpoint that accepts a JSON body with `roaster` (string) and `coffee_name` (string) fields. The endpoint SHALL return a JSON object with extracted coffee details mapped to CoffeeBean field names, or an error response.
@@ -24,7 +27,7 @@ The system SHALL expose a `POST /api/lookup` endpoint that accepts a JSON body w
 - **THEN** the response SHALL have status 400 and return an error message
 
 ### Requirement: CoffeeSearcher base class
-All lookup providers SHALL inherit from a `CoffeeSearcher` base class that defines the plugin interface. The base class SHALL define three abstract methods: `search(coffee_name) -> identifier`, `fetch_product(identifier) -> product_data`, and `extract(product_data) -> dict`. It SHALL provide a default `lookup(coffee_name) -> dict | None` method that calls search → fetch_product → extract in sequence.
+All lookup providers SHALL inherit from a `CoffeeSearcher` base class that defines the plugin interface. The base class SHALL define three abstract methods: `search(coffee_name) -> identifier`, `fetch_product(identifier) -> product_data`, and `extract(product_data) -> dict`. It SHALL provide a default `lookup(coffee_name) -> dict | None` method that calls search -> fetch_product -> extract in sequence.
 
 #### Scenario: Plugin implements all required methods
 - **WHEN** a new platform plugin is created inheriting from `CoffeeSearcher`
@@ -128,12 +131,12 @@ The provider SHALL reject search matches where the title similarity ratio is bel
 
 ### Requirement: Initial provider configuration
 The system SHALL ship with three configured providers:
-- `"gringo"` → WooCommerceSearcher for `gringonordic.se` with Swedish JSON-LD field mapping
-- `"morgon"` → ShopifySearcher for `morgoncoffeeroasters.com`
-- `"kafferäven"` → ShopifySearcher for `kafferaven.se`
+- `"gringo"` -> WooCommerceSearcher for `gringonordic.se` with Swedish JSON-LD field mapping
+- `"morgon"` -> ShopifySearcher for `morgoncoffeeroasters.com`
+- `"kafferaven"` -> ShopifySearcher for `kafferaven.se`
 
 #### Scenario: All three providers available
-- **WHEN** lookups are requested for roasters matching "Gringo", "Morgon", and "Kafferäven"
+- **WHEN** lookups are requested for roasters matching "Gringo", "Morgon", and "Kafferaven"
 - **THEN** all three SHALL resolve to their respective providers and return coffee data
 
 ### Requirement: Lookup availability indicator in API

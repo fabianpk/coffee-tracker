@@ -1,3 +1,8 @@
+## Purpose
+Provide a full-screen detail/edit panel for viewing, editing, and deleting individual coffee entries.
+
+## Requirements
+
 ### Requirement: Coffee detail panel
 The system SHALL display a full-screen overlay panel when the user taps/clicks a coffee card in the list. The panel SHALL show all CoffeeBean fields (roaster, name, country_grown, country_roasted, origin, process, roast_level, tasting_notes, weight, price, brew_score, espresso_score, notes) as editable inputs. The `other` field SHALL NOT be shown in the detail panel. The `comments` field SHALL be displayed as a textarea labeled "General Comments".
 

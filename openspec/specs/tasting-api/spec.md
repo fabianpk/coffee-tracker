@@ -1,3 +1,8 @@
+## Purpose
+Provide REST API endpoints for creating, listing, updating, and deleting tastings, plus average score computation and recent tastings retrieval.
+
+## Requirements
+
 ### Requirement: POST /api/tastings creates a tasting
 The system SHALL provide a `POST /api/tastings` route that accepts a JSON body and saves a new `Tasting` to the database.
 

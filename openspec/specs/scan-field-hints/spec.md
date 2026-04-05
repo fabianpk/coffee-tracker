@@ -1,3 +1,8 @@
+## Purpose
+Support optional scan hints, ephemeral "other" field display, and vision model configuration for coffee bag scanning.
+
+## Requirements
+
 ### Requirement: Scan hints file
 The system SHALL support an optional `scan_hints.md` file in the project root directory. When present and non-empty, its contents SHALL be appended to the Claude vision prompt as additional context for field extraction. The file SHALL be read on each scan request so edits take effect without restarting the service.
 
@@ -36,7 +41,7 @@ The `scan_hints.md` file SHALL be listed in `.gitignore` so each user can mainta
 - **THEN** it SHALL contain an entry for `scan_hints.md`
 
 ### Requirement: Other field is ephemeral scan output
-The scan review form SHALL display the "Other (from scan)" field as a read-only textarea for reference during review. The `other` field is purely ephemeral — it SHALL NOT be included in any save payload, SHALL NOT exist in the `CoffeeBean` model, and SHALL NOT have a column in the database. The `/api/scan` endpoint SHALL preserve the raw `other` value from Claude's response before `CoffeeBean.from_scan()` conversion and inject it into the response JSON alongside other transient metadata (`matched_roaster`, `qr_url`).
+The scan review form SHALL display the "Other (from scan)" field as a read-only textarea for reference during review. The `other` field is purely ephemeral -- it SHALL NOT be included in any save payload, SHALL NOT exist in the `CoffeeBean` model, and SHALL NOT have a column in the database. The `/api/scan` endpoint SHALL preserve the raw `other` value from Claude's response before `CoffeeBean.from_scan()` conversion and inject it into the response JSON alongside other transient metadata (`matched_roaster`, `qr_url`).
 
 #### Scenario: Other field shown during review but not saved
 - **WHEN** the user scans a coffee bag and the scan returns an `other` value

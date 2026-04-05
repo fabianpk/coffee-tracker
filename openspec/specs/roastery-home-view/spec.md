@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Replace the flat coffee list with a roastery button grid and recent tastings section on the home screen.
+
+## Requirements
 
 ### Requirement: Home screen shows recent tastings section
 The home screen SHALL display a "Recent Tastings" section at the top of the main content area (below the action buttons, above the roastery grid). This section SHALL show the last 2 tastings across all coffees, ordered by most recent first.

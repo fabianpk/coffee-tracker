@@ -1,3 +1,8 @@
+## Purpose
+Match scanned roastery names against known roasters in the database using fuzzy comparison to normalize roaster names.
+
+## Requirements
+
 ### Requirement: Match scanned roastery against known roasters
 After extracting coffee details from a scan, the system SHALL compare the scanned `roastery` name against all distinct `roaster` values in the `coffees` table. Matching SHALL use case-insensitive fuzzy comparison via `difflib.SequenceMatcher`.
 

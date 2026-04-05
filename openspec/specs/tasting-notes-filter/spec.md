@@ -1,3 +1,8 @@
+## Purpose
+Enable filtering coffees by individual tasting notes via clickable tag chips and a dedicated API endpoint.
+
+## Requirements
+
 ### Requirement: Filter coffees by tasting note
 The `GET /api/coffees` endpoint SHALL accept an optional `?note=` query parameter. When provided, the response SHALL include only coffees whose `tasting_notes` field contains the specified note as an individual item in the comma-separated list. Matching SHALL be case-insensitive.
 

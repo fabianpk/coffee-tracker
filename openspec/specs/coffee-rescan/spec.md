@@ -1,3 +1,8 @@
+## Purpose
+Allow rescanning a coffee bag from the detail panel to fill in missing fields without overwriting existing data.
+
+## Requirements
+
 ### Requirement: Rescan button in detail panel
 The detail panel SHALL include a "Scan another side" button that triggers a camera file input and runs a new scan against the existing `/api/scan` endpoint.
 

@@ -1,3 +1,8 @@
+## Purpose
+Detect QR codes in coffee bag photos, fetch the linked product page, and merge extracted data with the image scan results.
+
+## Requirements
+
 ### Requirement: QR code detection from uploaded image
 The system SHALL attempt to detect QR codes in the uploaded coffee bag image during the scan flow. Detection SHALL use pyzbar on the RGB-converted PIL Image before JPEG compression. Only QR codes containing HTTP or HTTPS URLs SHALL be considered valid.
 

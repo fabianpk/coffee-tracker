@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Display a detail view for a roastery showing all its coffees and their tastings when the roastery button is tapped.
+
+## Requirements
 
 ### Requirement: Roastery detail view on button tap
 When a roastery button is tapped on the home screen, the roastery grid SHALL be replaced with a detail view showing all coffees from that roastery and their associated tastings.

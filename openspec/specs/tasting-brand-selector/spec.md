@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Provide brand and coffee dropdown selectors in the tasting modal with sorting by recent tasting date and auto-selection for single-coffee brands.
+
+## Requirements
 
 ### Requirement: Brand selector in tasting modal
 The tasting modal SHALL display a brand (roaster) dropdown as the first selection step. The dropdown SHALL list all roasters from the database, sorted alphabetically. Selecting a brand SHALL populate the coffee selector with coffees from that brand.

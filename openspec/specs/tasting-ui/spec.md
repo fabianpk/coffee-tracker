@@ -1,3 +1,8 @@
+## Purpose
+Provide the tasting modal UI with create/edit modes, brew type selection, scoring, and tasting history display on coffee cards.
+
+## Requirements
+
 ### Requirement: Two top-level action buttons
 The page header SHALL contain two buttons: **Scan Coffee** (existing behaviour) and **Conduct Tasting** (new). The existing single "Scan / Add Coffee" button SHALL be replaced by these two.
 
@@ -11,7 +16,7 @@ Clicking **Conduct Tasting** SHALL open a modal that allows the user to record a
 The modal SHALL contain:
 - A brand (roaster) dropdown listing all roasters alphabetically
 - A coffee dropdown (hidden until a brand is selected) listing coffees for the selected brand, sorted by most recent tasting date descending
-- A brew type selector with the options: **Espresso**, **Brew**, **Metal Brew**, **Cappuccino** — rendered as buttons, each displaying an emoji and label from the brew type registry
+- A brew type selector with the options: **Espresso**, **Brew**, **Metal Brew**, **Cappuccino** -- rendered as buttons, each displaying an emoji and label from the brew type registry
 - A dosage dropdown/select with values from 10.0gr to 20.0gr in 0.1gr increments
 - A grind-level dropdown/select with values from 3.0 to 22.0 in 0.2 increments, using the same spinning-wheel style as dosage
 - A score picker (1-5 stars or buttons, same visual pattern as existing score inputs)
@@ -32,7 +37,7 @@ The modal SHALL contain:
 - **THEN** the modal SHALL close without saving
 
 ### Requirement: Average score shown on coffee card
-Each coffee card in the list SHALL display the `average_score` returned by the API. If `average_score` is `null`, the card SHALL show "–" in its place. The individual `brew_score` and `espresso_score` fields SHALL be removed from the card display.
+Each coffee card in the list SHALL display the `average_score` returned by the API. If `average_score` is `null`, the card SHALL show "--" in its place. The individual `brew_score` and `espresso_score` fields SHALL be removed from the card display.
 
 #### Scenario: Coffee with tastings shows average
 - **WHEN** a coffee card renders and the coffee has `average_score: 4.5`
@@ -40,7 +45,7 @@ Each coffee card in the list SHALL display the `average_score` returned by the A
 
 #### Scenario: Coffee with no tastings shows placeholder
 - **WHEN** a coffee card renders and the coffee has `average_score: null`
-- **THEN** the card SHALL display "–" where the score would appear
+- **THEN** the card SHALL display "--" where the score would appear
 
 ### Requirement: Tasting history per coffee card
 Each coffee card SHALL include a collapsible section that shows the tasting history for that coffee, fetched from `GET /api/tastings?coffee_id=<id>`.

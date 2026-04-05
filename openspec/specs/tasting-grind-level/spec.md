@@ -1,3 +1,8 @@
+## Purpose
+Add a grind level selector to the tasting modal with brew-type-specific defaults and carry-forward from previous tastings.
+
+## Requirements
+
 ### Requirement: Grind level selector in tasting modal
 The tasting modal SHALL include a grind-level selector using the same `<select>` spinning-wheel pattern as the dosage selector. The selector SHALL offer values from 3.0 to 22.0 in increments of 0.2, displayed with one decimal place.
 

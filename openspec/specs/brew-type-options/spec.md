@@ -1,3 +1,8 @@
+## Purpose
+Define a brew type registry with display labels and emojis, and render brew type buttons and history from it.
+
+## Requirements
+
 ### Requirement: Brew type registry
 The frontend SHALL define a brew type registry mapping each brew type key to a display label and emoji. The registry SHALL include the following entries:
 

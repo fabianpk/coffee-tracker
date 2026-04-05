@@ -1,3 +1,8 @@
+## Purpose
+Detect duplicate coffees after scanning and offer options to update the existing entry or save as new.
+
+## Requirements
+
 ### Requirement: Duplicate detection after scan
 After a scan populates the review form, the frontend SHALL check the cached coffee list for an existing coffee with the same `roaster` and `name` (case-insensitive, trimmed). If a match is found, the review form SHALL display an info banner (e.g. "A coffee with this name already exists") and change the save options. If a `qr_url` was detected, the banner MAY also mention that data was enriched from the product page.
 

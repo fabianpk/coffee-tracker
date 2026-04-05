@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement a TextalkSearcher provider that searches and extracts coffee data from Textalk/Abicart-based shops via JSON-RPC API.
+
+## Requirements
 
 ### Requirement: TextalkSearcher implements CoffeeSearcher ABC
 The `TextalkSearcher` class SHALL inherit from `CoffeeSearcher` and implement the `search()`, `fetch_product()`, and `extract()` methods. It SHALL be configured with a `base_url` (the shop's domain) and use the Abicart JSON-RPC 2.0 API at `{base_url}/backend/jsonrpc/v1/` for all data access.

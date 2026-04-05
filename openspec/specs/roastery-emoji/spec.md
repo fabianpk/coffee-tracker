@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Generate and cache a representative emoji for each roastery using the Claude API.
+
+## Requirements
 
 ### Requirement: Roastery emoji generation via Claude API
 The system SHALL generate a single emoji for each roastery by calling the Claude API (Haiku model) with the roastery name. The prompt SHALL ask for a single emoji that visually represents the roastery based on its name, origin, or character. The response SHALL be a single emoji character.

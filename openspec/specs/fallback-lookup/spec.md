@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement a fallback lookup chain using baristashopen.se when the primary roastery provider returns no results.
+
+## Requirements
 
 ### Requirement: Fallback lookup chain
 The `lookup_coffee()` function SHALL implement a fallback chain. When the primary roastery provider returns no results (or no provider exists for the roaster), the system SHALL automatically attempt a lookup using the fallback provider (baristashopen.se). The fallback SHALL search using the coffee name.

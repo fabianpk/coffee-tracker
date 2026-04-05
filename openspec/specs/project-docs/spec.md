@@ -1,3 +1,8 @@
+## Purpose
+Ensure project documentation (README.md and CLAUDE.md) accurately reflects the current architecture and setup instructions.
+
+## Requirements
+
 ### Requirement: README.md exists with accurate project overview
 The project SHALL have a `README.md` at the repository root containing: project description, prerequisites, setup instructions, usage instructions (web app and CLI), and a brief architecture overview.
 
