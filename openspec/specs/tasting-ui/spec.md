@@ -9,7 +9,8 @@ The page header SHALL contain two buttons: **Scan Coffee** (existing behaviour) 
 Clicking **Conduct Tasting** SHALL open a modal that allows the user to record a tasting for an existing coffee.
 
 The modal SHALL contain:
-- A dropdown/select listing all coffees in the database (label: roaster + name, or "Unknown" if both are null)
+- A brand (roaster) dropdown listing all roasters alphabetically
+- A coffee dropdown (hidden until a brand is selected) listing coffees for the selected brand, sorted by most recent tasting date descending
 - A brew type selector with the options: **Espresso**, **Brew**, **Metal Brew**, **Cappuccino** — rendered as buttons, each displaying an emoji and label from the brew type registry
 - A dosage dropdown/select with values from 10.0gr to 20.0gr in 0.1gr increments
 - A grind-level dropdown/select with values from 3.0 to 22.0 in 0.2 increments, using the same spinning-wheel style as dosage
@@ -20,11 +21,11 @@ The modal SHALL contain:
 
 #### Scenario: Open tasting modal
 - **WHEN** the user clicks "Conduct Tasting"
-- **THEN** the tasting modal SHALL appear with four brew type buttons showing emojis, the coffee dropdown populated from the database, and the grind-level selector
+- **THEN** the tasting modal SHALL appear with the brand dropdown populated, the coffee dropdown hidden, and the brew type buttons visible
 
-#### Scenario: Save a tasting with grind level
-- **WHEN** the user fills in grind level 6.4 and clicks "Save Tasting"
-- **THEN** the tasting SHALL be posted to `POST /api/tastings` with `grind_level: 6.4`
+#### Scenario: Select brand then coffee then save
+- **WHEN** the user selects a brand, selects a coffee, fills in brew details, and clicks "Save Tasting"
+- **THEN** the tasting SHALL be posted to `POST /api/tastings` with the selected coffee's ID
 
 #### Scenario: Cancel tasting
 - **WHEN** the user clicks "Cancel" in the tasting modal
@@ -92,18 +93,19 @@ Each tasting entry in the tasting history SHALL display an "edit" button alongsi
 
 ### Requirement: Tasting modal edit mode
 The tasting modal SHALL support an edit mode in addition to the existing create mode. In edit mode:
-- The coffee selector SHALL be disabled (locked to the tasting's coffee)
+- The brand dropdown SHALL show the tasting's coffee roaster and be disabled
+- The coffee dropdown SHALL show the tasting's coffee name and be disabled
 - The save button text SHALL read "Update Tasting"
 - The modal title SHALL read "Edit Tasting"
 - On save, the system SHALL send a PUT request to update the existing tasting instead of POST
 
 #### Scenario: Modal in create mode
 - **WHEN** the user clicks "Conduct Tasting" from the top button
-- **THEN** the modal title SHALL be "Conduct Tasting", the save button SHALL read "Save Tasting", and the coffee selector SHALL be enabled
+- **THEN** the modal title SHALL be "Conduct Tasting", the save button SHALL read "Save Tasting", and both selectors SHALL be enabled
 
 #### Scenario: Modal in edit mode
 - **WHEN** the user clicks "edit" on an existing tasting entry
-- **THEN** the modal title SHALL be "Edit Tasting", the save button SHALL read "Update Tasting", and the coffee selector SHALL be disabled
+- **THEN** the modal title SHALL be "Edit Tasting", the save button SHALL read "Update Tasting", and both selectors SHALL be disabled
 
 #### Scenario: Successful edit updates tasting history
 - **WHEN** the user edits a tasting and clicks "Update Tasting"

@@ -471,6 +471,12 @@
         <div class="tasting-modal-content">
             <h2 id="tasting-modal-title">Conduct Tasting</h2>
             <div class="field">
+                <label>Brand</label>
+                <select id="t-brand" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
+                    <option value="">Select a brand...</option>
+                </select>
+            </div>
+            <div class="field" id="t-coffee-field" style="display:none">
                 <label>Coffee</label>
                 <select id="t-coffee" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px">
                     <option value="">Select a coffee...</option>
@@ -1035,16 +1041,27 @@
             editingTastingId = tastingId;
             editingCoffeeId = coffeeId;
 
-            // Set coffee selector to the tasting's coffee and disable it
+            // Pre-fill brand dropdown and disable
+            const coffee = coffeeCache.find(c => c.id === coffeeId);
+            const brandSel = $("t-brand");
+            brandSel.innerHTML = '';
+            const brandOpt = document.createElement("option");
+            brandOpt.value = coffee ? coffee.roaster || "" : "";
+            brandOpt.textContent = coffee ? coffee.roaster || "Unknown" : "Unknown";
+            brandSel.appendChild(brandOpt);
+            brandSel.value = brandOpt.value;
+            brandSel.disabled = true;
+
+            // Pre-fill coffee dropdown and disable
             const sel = $("t-coffee");
             sel.innerHTML = '';
-            const coffee = coffeeCache.find(c => c.id === coffeeId);
             const opt = document.createElement("option");
             opt.value = coffeeId;
-            opt.textContent = coffee ? (coffee.roaster || "Unknown") + " - " + (coffee.name || "Unknown") : "Coffee #" + coffeeId;
+            opt.textContent = coffee ? (coffee.name || "Unknown") : "Coffee #" + coffeeId;
             sel.appendChild(opt);
             sel.value = coffeeId;
             sel.disabled = true;
+            $("t-coffee-field").style.display = "block";
 
             // Pre-populate brew type
             selectedBrewType = t.brew_type || null;
@@ -1114,6 +1131,31 @@
             grindManuallyChanged = true;
         });
 
+        // Brand change: populate coffee dropdown for selected brand
+        $("t-brand").addEventListener("change", async () => {
+            const brand = $("t-brand").value;
+            const coffeeField = $("t-coffee-field");
+            const sel = $("t-coffee");
+            sel.innerHTML = '<option value="">Select a coffee...</option>';
+            if (!brand) {
+                coffeeField.style.display = "none";
+                return;
+            }
+            coffeeField.style.display = "block";
+            const res = await fetch("/api/coffees?roaster=" + encodeURIComponent(brand) + "&sort=last_tasting");
+            const coffees = await res.json();
+            coffees.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.id;
+                opt.textContent = c.name || "Unknown";
+                sel.appendChild(opt);
+            });
+            if (coffees.length === 1) {
+                sel.value = coffees[0].id;
+                sel.dispatchEvent(new Event("change"));
+            }
+        });
+
         // Smart grind default: fetch last grind level when coffee is selected
         $("t-coffee").addEventListener("change", async () => {
             const coffeeId = $("t-coffee").value;
@@ -1141,18 +1183,43 @@
             editingCoffeeId = null;
             $("tasting-modal-title").textContent = "Conduct Tasting";
             $("tasting-save-btn").textContent = "Save Tasting";
-            const sel = $("t-coffee");
-            sel.disabled = false;
-            sel.innerHTML = '<option value="">Select a coffee...</option>';
-            const res = await fetch("/api/coffees");
-            const coffees = await res.json();
-            coffees.forEach(c => {
+
+            // Populate brand dropdown alphabetically
+            const brandSel = $("t-brand");
+            brandSel.disabled = false;
+            brandSel.innerHTML = '<option value="">Select a brand...</option>';
+            const sortedRoasters = [...roasterCache].sort((a, b) => a.roaster.localeCompare(b.roaster, undefined, {sensitivity: 'base'}));
+            sortedRoasters.forEach(r => {
                 const opt = document.createElement("option");
-                opt.value = c.id;
-                opt.textContent = (c.roaster || "Unknown") + " - " + (c.name || "Unknown");
-                sel.appendChild(opt);
+                opt.value = r.roaster;
+                opt.textContent = r.roaster;
+                brandSel.appendChild(opt);
             });
-            sel.value = coffeeId;
+
+            const coffeeSel = $("t-coffee");
+            coffeeSel.disabled = false;
+
+            // Pre-select brand and coffee if coffeeId provided
+            const coffee = coffeeCache.find(c => c.id === coffeeId);
+            if (coffee && coffee.roaster) {
+                brandSel.value = coffee.roaster;
+                // Fetch coffees for this brand
+                const res = await fetch("/api/coffees?roaster=" + encodeURIComponent(coffee.roaster) + "&sort=last_tasting");
+                const coffees = await res.json();
+                coffeeSel.innerHTML = '<option value="">Select a coffee...</option>';
+                coffees.forEach(c => {
+                    const opt = document.createElement("option");
+                    opt.value = c.id;
+                    opt.textContent = c.name || "Unknown";
+                    coffeeSel.appendChild(opt);
+                });
+                coffeeSel.value = coffeeId;
+                $("t-coffee-field").style.display = "block";
+            } else {
+                coffeeSel.innerHTML = '<option value="">Select a coffee...</option>';
+                $("t-coffee-field").style.display = "none";
+            }
+
             selectedBrewType = null;
             selectedTastingScore = null;
             $("t-brew-type-buttons").querySelectorAll("button").forEach(b => b.classList.remove("active"));
@@ -1163,7 +1230,7 @@
             lastCoffeeGrindLevel = null;
             $("t-tasting_notes").value = "";
             $("t-comments").value = "";
-            sel.dispatchEvent(new Event("change"));
+            coffeeSel.dispatchEvent(new Event("change"));
             $("tasting-modal").classList.add("active");
         }
 
@@ -1173,18 +1240,22 @@
             editingCoffeeId = null;
             $("tasting-modal-title").textContent = "Conduct Tasting";
             $("tasting-save-btn").textContent = "Save Tasting";
-            // Populate coffee dropdown
-            const sel = $("t-coffee");
-            sel.disabled = false;
-            sel.innerHTML = '<option value="">Select a coffee...</option>';
-            const res = await fetch("/api/coffees");
-            const coffees = await res.json();
-            coffees.forEach(c => {
+            // Populate brand dropdown alphabetically
+            const brandSel = $("t-brand");
+            brandSel.disabled = false;
+            brandSel.innerHTML = '<option value="">Select a brand...</option>';
+            const sortedRoasters = [...roasterCache].sort((a, b) => a.roaster.localeCompare(b.roaster, undefined, {sensitivity: 'base'}));
+            sortedRoasters.forEach(r => {
                 const opt = document.createElement("option");
-                opt.value = c.id;
-                opt.textContent = (c.roaster || "Unknown") + " - " + (c.name || "Unknown");
-                sel.appendChild(opt);
+                opt.value = r.roaster;
+                opt.textContent = r.roaster;
+                brandSel.appendChild(opt);
             });
+            // Reset coffee dropdown
+            const coffeeSel = $("t-coffee");
+            coffeeSel.disabled = false;
+            coffeeSel.innerHTML = '<option value="">Select a coffee...</option>';
+            $("t-coffee-field").style.display = "none";
             // Reset form
             selectedBrewType = null;
             selectedTastingScore = null;

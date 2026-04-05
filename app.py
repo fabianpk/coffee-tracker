@@ -443,22 +443,58 @@ def scan():
 def list_coffees():
     db = get_db()
     note_filter = request.args.get("note")
-    if note_filter:
-        # Match individual note in comma-separated list (case-insensitive)
+    roaster_filter = request.args.get("roaster")
+    sort_mode = request.args.get("sort")
+
+    if sort_mode == "last_tasting":
+        query = """
+            SELECT c.*, MAX(t.created_at) as last_tasting_at
+            FROM coffees c
+            LEFT JOIN tastings t ON c.id = t.coffee_id
+            WHERE 1=1
+        """
+        params = []
+        if roaster_filter:
+            query += " AND c.roaster = ?"
+            params.append(roaster_filter)
+        if note_filter:
+            query += " AND c.tasting_notes LIKE ? COLLATE NOCASE"
+            params.append(f"%{note_filter}%")
+        query += " GROUP BY c.id ORDER BY CASE WHEN MAX(t.created_at) IS NULL THEN 1 ELSE 0 END, MAX(t.created_at) DESC"
+        rows = db.execute(query, params).fetchall()
+        if note_filter:
+            filtered = []
+            for r in rows:
+                notes = [n.strip() for n in (r["tasting_notes"] or "").split(",")]
+                if any(n.lower() == note_filter.lower() for n in notes):
+                    filtered.append(r)
+            rows = filtered
+    elif note_filter:
         pattern = f"%{note_filter}%"
-        rows = db.execute(
-            "SELECT * FROM coffees WHERE tasting_notes LIKE ? COLLATE NOCASE ORDER BY created_at DESC",
-            (pattern,),
-        ).fetchall()
-        # Post-filter to match whole individual notes, not substrings
+        if roaster_filter:
+            rows = db.execute(
+                "SELECT * FROM coffees WHERE tasting_notes LIKE ? COLLATE NOCASE AND roaster = ? ORDER BY created_at DESC",
+                (pattern, roaster_filter),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM coffees WHERE tasting_notes LIKE ? COLLATE NOCASE ORDER BY created_at DESC",
+                (pattern,),
+            ).fetchall()
         filtered = []
         for r in rows:
             notes = [n.strip() for n in (r["tasting_notes"] or "").split(",")]
             if any(n.lower() == note_filter.lower() for n in notes):
                 filtered.append(r)
         rows = filtered
+    elif roaster_filter:
+        rows = db.execute(
+            "SELECT * FROM coffees WHERE roaster = ? ORDER BY created_at DESC",
+            (roaster_filter,),
+        ).fetchall()
     else:
         rows = db.execute("SELECT * FROM coffees ORDER BY created_at DESC").fetchall()
+
     coffees = []
     for r in rows:
         avg = db.execute("SELECT ROUND(AVG(score), 1) FROM tastings WHERE coffee_id = ?", (r["id"],)).fetchone()[0]
@@ -484,10 +520,20 @@ def list_tasting_notes():
 
 @app.route("/api/roasters", methods=["GET"])
 def list_roasters():
-    """Return distinct roaster names with emojis, optionally filtered by prefix."""
+    """Return distinct roaster names with emojis, sorted by tasting count descending."""
     db = get_db()
-    rows = db.execute("SELECT DISTINCT roaster FROM coffees WHERE roaster IS NOT NULL AND roaster != ''").fetchall()
-    roaster_names = sorted([r["roaster"] for r in rows], key=str.lower)
+    rows = db.execute("""
+        SELECT c.roaster, COUNT(t.id) as tasting_count
+        FROM coffees c
+        LEFT JOIN tastings t ON c.id = t.coffee_id
+        WHERE c.roaster IS NOT NULL AND c.roaster != ''
+        GROUP BY c.roaster
+        ORDER BY CASE WHEN COUNT(t.id) = 0 THEN 1 ELSE 0 END,
+                 COUNT(t.id) DESC,
+                 c.roaster COLLATE NOCASE ASC
+    """).fetchall()
+    roaster_names = [r["roaster"] for r in rows]
+    tasting_counts = {r["roaster"]: r["tasting_count"] for r in rows}
     q = request.args.get("q", "").strip().lower()
     if q:
         roaster_names = [r for r in roaster_names if r.lower().startswith(q)]
@@ -509,7 +555,7 @@ def list_roasters():
         db.commit()
 
     db.close()
-    result = [{"roaster": r, "emoji": emoji_map.get(r, "☕")} for r in roaster_names]
+    result = [{"roaster": r, "emoji": emoji_map.get(r, "☕"), "tasting_count": tasting_counts.get(r, 0)} for r in roaster_names]
     return jsonify(result)
 
 

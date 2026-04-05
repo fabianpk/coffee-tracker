@@ -18,11 +18,19 @@ Each tasting card SHALL display: brew type with emoji, dosage, grind level, scor
 - **THEN** the Recent Tastings section SHALL not be rendered
 
 ### Requirement: Home screen shows roastery button grid
-The home screen SHALL display a grid of buttons, one per distinct roastery. Each button SHALL display the roastery's cached emoji followed by the roastery name. Buttons SHALL be sorted alphabetically by roastery name.
+The home screen SHALL display a grid of buttons, one per distinct roastery. Each button SHALL display the roastery's cached emoji followed by the roastery name. Buttons SHALL be sorted by total number of tastings conducted for coffees from that roastery (descending). Roasteries with zero tastings SHALL appear at the end, sorted alphabetically among themselves. Roasteries with equal tasting counts SHALL be sorted alphabetically.
 
-#### Scenario: Multiple roasteries displayed
-- **WHEN** the home screen loads and there are coffees from 3 different roasters
-- **THEN** 3 roastery buttons SHALL be rendered in alphabetical order, each showing its emoji and name
+#### Scenario: Roasteries sorted by tasting count
+- **WHEN** the home screen loads and Roaster A has 10 tastings, Roaster B has 5 tastings, and Roaster C has 20 tastings
+- **THEN** the roastery buttons SHALL appear in order: Roaster C, Roaster A, Roaster B
+
+#### Scenario: Roasteries with zero tastings sorted alphabetically at end
+- **WHEN** the home screen loads and Roaster A has 3 tastings, Roaster B has 0 tastings, and Roaster C has 0 tastings
+- **THEN** the roastery buttons SHALL appear in order: Roaster A, Roaster B, Roaster C
+
+#### Scenario: Roasteries with equal tasting counts sorted alphabetically
+- **WHEN** the home screen loads and Roaster A has 5 tastings and Roaster B has 5 tastings
+- **THEN** Roaster A SHALL appear before Roaster B (alphabetical tiebreak)
 
 #### Scenario: No coffees exist
 - **WHEN** the home screen loads and there are no coffees
