@@ -12,10 +12,11 @@ The frontend SHALL define a brew type registry mapping each brew type key to a d
 | `brew`        | Brew        | (brew-appropriate emoji) |
 | `metal_brew`  | Metal Brew  | (metal-brew-appropriate emoji) |
 | `cappuccino`  | Cappuccino  | (cappuccino-appropriate emoji) |
+| `coldbrew`    | Cold Brew   | (cold-brew-appropriate emoji) |
 
-#### Scenario: All four brew types are defined
+#### Scenario: All five brew types are defined
 - **WHEN** the brew type registry is accessed
-- **THEN** it SHALL contain exactly four entries: `espresso`, `brew`, `metal_brew`, `cappuccino`
+- **THEN** it SHALL contain exactly five entries: `espresso`, `brew`, `metal_brew`, `cappuccino`, `coldbrew`
 
 #### Scenario: Each entry has an emoji and label
 - **WHEN** any brew type entry is accessed from the registry
@@ -24,9 +25,9 @@ The frontend SHALL define a brew type registry mapping each brew type key to a d
 ### Requirement: Brew type buttons rendered from registry
 The tasting modal brew type selector SHALL render one button per registry entry. Each button SHALL display the emoji followed by the label text.
 
-#### Scenario: Four brew type buttons displayed
+#### Scenario: Five brew type buttons displayed
 - **WHEN** the tasting modal opens
-- **THEN** four brew type buttons SHALL be visible: Espresso, Brew, Metal Brew, and Cappuccino, each with its emoji
+- **THEN** five brew type buttons SHALL be visible: Espresso, Brew, Metal Brew, Cappuccino, and Cold Brew, each with its emoji
 
 #### Scenario: Selecting a brew type
 - **WHEN** the user clicks a brew type button
