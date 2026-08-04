@@ -768,6 +768,42 @@ def api_lookup():
     return jsonify(result)
 
 
+@app.route("/api/stats", methods=["GET"])
+def stats():
+    brew_type = request.args.get("brew_type", "").strip() or None
+    db = get_db()
+    if brew_type:
+        rows = db.execute(
+            """SELECT c.roaster, c.name, t.brew_type,
+                      ROUND(AVG(t.score), 1) AS avg_score,
+                      COUNT(t.id) AS tasting_count
+               FROM coffees c
+               JOIN tastings t ON t.coffee_id = c.id
+               WHERE t.score IS NOT NULL AND t.brew_type = ?
+               GROUP BY c.id, t.brew_type
+               ORDER BY c.roaster COLLATE NOCASE, avg_score DESC""",
+            (brew_type,),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """SELECT c.roaster, c.name, t.brew_type,
+                      ROUND(AVG(t.score), 1) AS avg_score,
+                      COUNT(t.id) AS tasting_count
+               FROM coffees c
+               JOIN tastings t ON t.coffee_id = c.id
+               WHERE t.score IS NOT NULL
+               GROUP BY c.id, t.brew_type
+               ORDER BY c.roaster COLLATE NOCASE, avg_score DESC"""
+        ).fetchall()
+    # Also return available brew types for filter dropdown
+    brew_types = [r["brew_type"] for r in db.execute(
+        "SELECT DISTINCT brew_type FROM tastings WHERE brew_type IS NOT NULL ORDER BY brew_type"
+    ).fetchall()]
+    db.close()
+    result = [dict(r) for r in rows]
+    return jsonify({"entries": result, "brew_types": brew_types})
+
+
 @app.route("/api/lookup/available", methods=["GET"])
 def api_lookup_available():
     roaster = request.args.get("roaster", "").strip()
