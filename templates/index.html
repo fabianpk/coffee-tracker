@@ -401,6 +401,7 @@
     <div class="top-buttons">
         <button class="scan-btn" id="add-coffee-btn">Add Coffee to Database</button>
         <button class="tasting-btn" id="tasting-btn">Conduct Tasting</button>
+        <button class="tasting-btn" id="stats-btn" style="background:#5c6bc0">Stats</button>
     </div>
 
     <div id="review-form" class="card">
@@ -533,6 +534,20 @@
             <button id="clear-filter-btn" aria-label="Clear filter">&times;</button>
         </div>
         <div id="roastery-coffee-list"></div>
+    </div>
+
+    <div id="stats-view" style="display:none">
+        <div class="roastery-detail-header">
+            <button class="roastery-back-btn" id="stats-back-btn">←</button>
+            <h2>Tasting Stats</h2>
+        </div>
+        <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#999;text-transform:uppercase;letter-spacing:0.5px">Filter by Brew Type</label>
+            <select id="stats-brew-filter" style="width:100%;padding:8px;background:#333;border:1px solid #444;border-radius:8px;color:#e0e0e0;font-size:16px;margin-top:4px">
+                <option value="">All brew types</option>
+            </select>
+        </div>
+        <div id="stats-content"></div>
     </div>
 
     <script>
@@ -877,9 +892,10 @@
             const roasters = await roastersRes.json();
             coffeeCache = await coffeesRes.json();
 
-            // Show home view, hide roastery detail
+            // Show home view, hide roastery detail and stats
             $("home-view").style.display = "block";
             $("roastery-detail-view").style.display = "none";
+            $("stats-view").style.display = "none";
             currentRoastery = null;
 
             // Render recent tastings
@@ -1526,6 +1542,73 @@
                 btn.textContent = origText;
             }
         });
+
+        // ── Stats view ─────────────────────────────────────────────────────
+        $("stats-btn").addEventListener("click", () => openStats());
+        $("stats-back-btn").addEventListener("click", () => {
+            $("stats-view").style.display = "none";
+            $("home-view").style.display = "block";
+        });
+        $("stats-brew-filter").addEventListener("change", () => openStats());
+
+        async function openStats() {
+            const brewFilter = $("stats-brew-filter").value;
+            const url = brewFilter
+                ? "/api/stats?brew_type=" + encodeURIComponent(brewFilter)
+                : "/api/stats";
+            const res = await fetch(url);
+            const data = await res.json();
+
+            // Update brew type dropdown (preserve selection)
+            const sel = $("stats-brew-filter");
+            const current = sel.value;
+            sel.innerHTML = '<option value="">All brew types</option>';
+            data.brew_types.forEach(bt => {
+                const opt = document.createElement("option");
+                opt.value = bt;
+                opt.textContent = (BREW_TYPES[bt] ? BREW_TYPES[bt].emoji + " " + BREW_TYPES[bt].label : bt);
+                if (bt === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+
+            // Group entries by roaster
+            const grouped = {};
+            data.entries.forEach(e => {
+                if (!grouped[e.roaster]) grouped[e.roaster] = [];
+                grouped[e.roaster].push(e);
+            });
+
+            const content = $("stats-content");
+            if (data.entries.length === 0) {
+                content.innerHTML = '<p class="empty">No rated coffees found.</p>';
+            } else {
+                content.innerHTML = Object.entries(grouped).map(([roaster, coffees]) => {
+                    const roasterAvg = (coffees.reduce((s, c) => s + c.avg_score * c.tasting_count, 0) /
+                        coffees.reduce((s, c) => s + c.tasting_count, 0)).toFixed(1);
+                    return `
+                        <div class="card" style="margin-bottom:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                                <strong style="font-size:15px">${esc(roaster || "Unknown")}</strong>
+                                <span style="color:#ffc107;font-size:14px">${roasterAvg} ★ avg</span>
+                            </div>
+                            ${coffees.map(c => `
+                                <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #3a3a3a">
+                                    <div>
+                                        <div style="font-size:14px">${esc(c.name || "Unknown")}</div>
+                                        ${!brewFilter ? `<div style="font-size:12px;color:#999">${brewTypeDisplay(c.brew_type)} · ${c.tasting_count} tasting${c.tasting_count > 1 ? "s" : ""}</div>` : `<div style="font-size:12px;color:#999">${c.tasting_count} tasting${c.tasting_count > 1 ? "s" : ""}</div>`}
+                                    </div>
+                                    <span style="color:#ffc107;font-size:14px;white-space:nowrap">${c.avg_score} ★</span>
+                                </div>
+                            `).join("")}
+                        </div>
+                    `;
+                }).join("");
+            }
+
+            $("home-view").style.display = "none";
+            $("roastery-detail-view").style.display = "none";
+            $("stats-view").style.display = "block";
+        }
 
         loadHomeScreen();
         loadRoasters();
