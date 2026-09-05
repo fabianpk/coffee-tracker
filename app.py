@@ -34,6 +34,14 @@ DB_PATH = Path(__file__).parent / "coffees.db"
 SUPPORTED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 SCAN_HINTS_PATH = Path(__file__).parent / "scan_hints.md"
 MAX_HINTS_CHARS = 2000
+ROASTERY_EMOJI_OVERRIDES = {
+    "morgon coffee roaster": "🌅",
+    "fritz": "🐈‍⬛",
+}
+
+
+def roastery_emoji_override(roaster_name: str) -> str | None:
+    return ROASTERY_EMOJI_OVERRIDES.get(roaster_name.strip().casefold())
 
 
 def load_scan_hints() -> str:
@@ -542,8 +550,11 @@ def list_roasters():
     emoji_rows = db.execute("SELECT roaster, emoji FROM roastery_emojis").fetchall()
     emoji_map = {r["roaster"]: r["emoji"] for r in emoji_rows}
 
-    # Generate missing emojis in batch
-    missing = [r for r in roaster_names if r not in emoji_map]
+    # Generate missing emojis in batch, except for names with a fixed override.
+    missing = [
+        r for r in roaster_names
+        if r not in emoji_map and roastery_emoji_override(r) is None
+    ]
     if missing:
         new_emojis = generate_roastery_emojis_batch(missing)
         for name, emoji in new_emojis.items():
@@ -552,6 +563,21 @@ def list_roasters():
                 (name, emoji),
             )
             emoji_map[name] = emoji
+        db.commit()
+
+    # Apply fixed overrides so cached/generated values cannot replace them.
+    overrides_changed = False
+    for name in roaster_names:
+        override = roastery_emoji_override(name)
+        if override:
+            if emoji_map.get(name) != override:
+                db.execute(
+                    "INSERT OR REPLACE INTO roastery_emojis (roaster, emoji) VALUES (?, ?)",
+                    (name, override),
+                )
+                overrides_changed = True
+            emoji_map[name] = override
+    if overrides_changed:
         db.commit()
 
     db.close()
@@ -581,19 +607,26 @@ def save_coffee():
     db = get_db()
     db.execute(f"INSERT INTO coffees ({columns}) VALUES ({placeholders})", list(row.values()))
     db.commit()
-    # Generate emoji for roaster if not already cached
+    # Generate or apply the emoji for the roaster.
     roaster = data.get("roaster", "").strip()
     if roaster:
         existing = db.execute(
             "SELECT emoji FROM roastery_emojis WHERE roaster = ?", (roaster,)
         ).fetchone()
-        if not existing:
+        override = roastery_emoji_override(roaster)
+        if override:
+            if not existing or existing["emoji"] != override:
+                db.execute(
+                    "INSERT OR REPLACE INTO roastery_emojis (roaster, emoji) VALUES (?, ?)",
+                    (roaster, override),
+                )
+        elif not existing:
             emoji = generate_roastery_emoji(roaster)
             db.execute(
                 "INSERT OR REPLACE INTO roastery_emojis (roaster, emoji) VALUES (?, ?)",
                 (roaster, emoji),
             )
-            db.commit()
+        db.commit()
     db.close()
     return jsonify({"status": "saved"}), 201
 
