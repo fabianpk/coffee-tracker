@@ -36,7 +36,9 @@ SCAN_HINTS_PATH = Path(__file__).parent / "scan_hints.md"
 MAX_HINTS_CHARS = 2000
 ROASTERY_EMOJI_OVERRIDES = {
     "morgon coffee roaster": "🌅",
+    "morgon coffee roasters": "🌅",
     "fritz": "🐈‍⬛",
+    "fritz coffee": "🐈‍⬛",
 }
 
 
