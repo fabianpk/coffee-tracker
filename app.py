@@ -37,8 +37,8 @@ MAX_HINTS_CHARS = 2000
 ROASTERY_EMOJI_OVERRIDES = {
     "morgon coffee roaster": "🌅",
     "morgon coffee roasters": "🌅",
-    "fritz": "🐈‍⬛",
-    "fritz coffee": "🐈‍⬛",
+    "fritz": "🦭",
+    "fritz coffee": "🦭",
 }
 
 
