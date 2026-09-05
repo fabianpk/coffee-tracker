@@ -1038,11 +1038,19 @@
             return bt ? bt.emoji + " " + bt.label : (key || "–");
         }
 
+        const DOSAGE_DEFAULTS = {
+            cappuccino: 18.0,
+            espresso: 13.0,
+            metal_brew: 15.0,
+            coldbrew: 15.0,
+            brew: 15.0,
+        };
+
         const GRIND_DEFAULTS = {
-            espresso: 0.2,
-            brew: 2.0,
-            metal_brew: 8.5,
-            cappuccino: 0.2,
+            cappuccino: 2.5,
+            espresso: 2.5,
+            brew: 5.0,
+            metal_brew: 9.0,
             coldbrew: 9.0,
         };
 
@@ -1051,7 +1059,10 @@
         let editingTastingId = null;
         let editingCoffeeId = null;
         let grindManuallyChanged = false;
-        let lastCoffeeGrindLevel = null;
+        let dosageManuallyChanged = false;
+        let coffeeTastings = [];
+        let lastCoffeeMethodGrindLevel = null;
+        let coffeeTastingsRequest = 0;
 
         function editTasting(tastingId, coffeeId) {
             const t = tastingsCache[tastingId];
@@ -1093,7 +1104,9 @@
             // Pre-populate grind level
             $("t-grind-level").value = t.grind_level != null ? t.grind_level : "";
             grindManuallyChanged = false;
-            lastCoffeeGrindLevel = t.grind_level;
+            coffeeTastings = t.grind_level != null
+                ? [{ brew_type: t.brew_type, grind_level: t.grind_level }]
+                : [];
 
             // Pre-populate score
             selectedTastingScore = t.score != null ? t.score : null;
@@ -1149,6 +1162,10 @@
             grindManuallyChanged = true;
         });
 
+        $("t-dosage").addEventListener("change", () => {
+            dosageManuallyChanged = true;
+        });
+
         // Brand change: populate coffee dropdown for selected brand
         $("t-brand").addEventListener("change", async () => {
             const brand = $("t-brand").value;
@@ -1174,26 +1191,38 @@
             }
         });
 
-        // Smart grind default: fetch last grind level when coffee is selected
+        function applyBrewTypeDefaults() {
+            if (!selectedBrewType) return;
+
+            if (!dosageManuallyChanged && DOSAGE_DEFAULTS[selectedBrewType] != null) {
+                $("t-dosage").value = DOSAGE_DEFAULTS[selectedBrewType];
+            }
+
+            const withMethodGrind = coffeeTastings.find(t =>
+                t.brew_type === selectedBrewType && t.grind_level != null
+            );
+            lastCoffeeMethodGrindLevel = withMethodGrind ? withMethodGrind.grind_level : null;
+            if (!grindManuallyChanged) {
+                $("t-grind-level").value = lastCoffeeMethodGrindLevel != null
+                    ? lastCoffeeMethodGrindLevel
+                    : GRIND_DEFAULTS[selectedBrewType] ?? "";
+            }
+        }
+
+        // Smart defaults: load tasting history when a coffee is selected.
         $("t-coffee").addEventListener("change", async () => {
             const coffeeId = $("t-coffee").value;
-            lastCoffeeGrindLevel = null;
+            const requestId = ++coffeeTastingsRequest;
+            coffeeTastings = [];
+            lastCoffeeMethodGrindLevel = null;
             if (coffeeId) {
                 const res = await fetch("/api/tastings?coffee_id=" + coffeeId);
                 const tastings = await res.json();
-                const withGrind = tastings.find(t => t.grind_level != null);
-                if (withGrind) {
-                    lastCoffeeGrindLevel = withGrind.grind_level;
-                    $("t-grind-level").value = withGrind.grind_level;
-                    grindManuallyChanged = false;
-                    return;
-                }
-            }
-            // No prior grind level — use brew-type default if a brew type is selected
-            if (selectedBrewType && GRIND_DEFAULTS[selectedBrewType] != null) {
-                $("t-grind-level").value = GRIND_DEFAULTS[selectedBrewType];
+                if (requestId !== coffeeTastingsRequest) return;
+                coffeeTastings = tastings;
             }
             grindManuallyChanged = false;
+            applyBrewTypeDefaults();
         });
 
         async function openNewTastingFor(coffeeId) {
@@ -1245,7 +1274,9 @@
             $("t-dosage").value = "";
             $("t-grind-level").value = "";
             grindManuallyChanged = false;
-            lastCoffeeGrindLevel = null;
+            dosageManuallyChanged = false;
+            coffeeTastings = [];
+            lastCoffeeMethodGrindLevel = null;
             $("t-tasting_notes").value = "";
             $("t-comments").value = "";
             coffeeSel.dispatchEvent(new Event("change"));
@@ -1282,7 +1313,9 @@
             $("t-dosage").value = "";
             $("t-grind-level").value = "";
             grindManuallyChanged = false;
-            lastCoffeeGrindLevel = null;
+            dosageManuallyChanged = false;
+            coffeeTastings = [];
+            lastCoffeeMethodGrindLevel = null;
             $("t-tasting_notes").value = "";
             $("t-comments").value = "";
             $("tasting-modal").classList.add("active");
@@ -1294,10 +1327,7 @@
                 $("t-brew-type-buttons").querySelectorAll("button").forEach(b =>
                     b.classList.toggle("active", b.dataset.val === selectedBrewType)
                 );
-                // Set grind default if user hasn't manually changed it and no prior grind level
-                if (!grindManuallyChanged && lastCoffeeGrindLevel == null && GRIND_DEFAULTS[selectedBrewType] != null) {
-                    $("t-grind-level").value = GRIND_DEFAULTS[selectedBrewType];
-                }
+                applyBrewTypeDefaults();
             }
         });
 
